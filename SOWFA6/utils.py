@@ -73,9 +73,15 @@ class InputFile(object):
                 print('PARSING',name,'FROM',line,'of TYPE',containertype)
             self._parse(name,line,containertype)
 
+    def _format_item_str(self,val,maxstrlen=60):
+        printval = str(val)
+        if len(printval) > maxstrlen:
+            printval = '[list of length {:d}]'.format(len(val))
+        return printval
+
     def __repr__(self):
         descstrs = [
-            '{:s} : {:s}'.format(key,str(val))
+            '{:s} : {:s}'.format(key, self._format_item_str(val))
             for key,val in self._properties.items()
         ]
         return '\n'.join(descstrs)
