@@ -75,7 +75,7 @@ class InputFile(object):
 
     def _format_item_str(self,val,maxstrlen=60):
         printval = str(val)
-        if len(printval) > maxstrlen:
+        if isinstance(val,list) and (len(printval) > maxstrlen):
             printval = '[list of length {:d}]'.format(len(val))
         return printval
 
