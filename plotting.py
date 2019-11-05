@@ -18,6 +18,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import pandas as pd
+import xarray as xr
 from scipy.interpolate import interp1d
 from scipy.signal import welch
 
@@ -1094,6 +1095,12 @@ class PlottingInput(object):
     Auxiliary class to collect input data and options for plotting
     functions, and to check if the inputs are consistent
     """
+    supported_datatypes = (
+        pd.Series,
+        pd.DataFrame,
+        xr.DataArray,
+        xr.Dataset,
+    )
 
     def __init__(self, datasets, fields, **argd):
         # Add all arguments as class attributes
@@ -1114,11 +1121,20 @@ class PlottingInput(object):
         # ----------------------
         # If a single dataset is provided, convert to a dictionary
         # under a generic key 'Dataset'
-        if isinstance(self.datasets,(pd.Series,pd.DataFrame)):
+        if isinstance(self.datasets, self.supported_datatypes):
             self.datasets = {'Dataset': self.datasets}
-        for dfname in self.datasets:
-            assert(isinstance(self.datasets[dfname],(pd.Series,pd.DataFrame))), \
-                "Currently only pandas Series or DataFrames are supported"
+        for dfname,df in self.datasets.items():
+            # convert dataset types here
+            if isinstance(df, (xr.Dataset,xr.DataArray)):
+                # handle xarray datatypes
+                self.datasets[dfname] = df.to_dataframe()
+                columns = self.datasets[dfname].columns
+                if len(columns) == 1:
+                    # convert to pd.Series
+                    self.datasets[dfname] = self.datasets[dfname][columns[0]]
+            else:
+                assert(isinstance(df, self.supported_datatypes)), \
+                    "Dataset {:s} of type {:s} not supported".format(dfname,str(type(df)))
            
         # ----------------------
         # Check fields argument
