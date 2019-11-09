@@ -27,14 +27,14 @@ class InputFile(object):
         ('(',')',list),
     ]
     true_values = [
-        'true','t',
+        'true',
         'on',
-        'yes','y',
+        'yes',
     ]
     false_values = [
-        'false','f',
+        'false',
         'off',
-        'no','n',
+        'no',
         'none',
     ]
 
