@@ -1598,7 +1598,7 @@ def _format_time_axis(fig,ax,
     if plot_local_time:
         # Format first axis (local time)
         ax[-1].xaxis.set_minor_locator(mdates.HourLocator(byhour=range(0,24,hour_interval)))
-        ax[-1].xaxis.set_minor_formatter(mdates.DateFormatter('%I %P'))
+        ax[-1].xaxis.set_minor_formatter(mdates.DateFormatter('%I %p'))
         ax[-1].xaxis.set_major_locator(mdates.DayLocator(interval=12)) #Choose large interval so dates are not plotted
         ax[-1].xaxis.set_major_formatter(mdates.DateFormatter(''))
 
