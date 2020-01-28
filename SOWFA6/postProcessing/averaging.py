@@ -10,16 +10,17 @@
 # specific language governing permissions and limitations under the License.
 
 """
-For processing SOWFA planar averages
-Based on original SOWFA/postProcessing/averaging.py
+For processing SOWFA-6 planar averages
+
+Based on original SOWFA/postProcessing/averaging.py from github.com/NWTC/datatools
 
 written by
-Dries Allaerts (dries.allaerts@nrel.gov)
-Eliot Quon (eliot.quon@nrel.gov)
+- Dries Allaerts (dries.allaerts@nrel.gov)
+- Eliot Quon (eliot.quon@nrel.gov)
 
 Sample usage:
 
-    from SOWFA6.postProcessing.averaging import PlanarAverages
+    from windtools.SOWFA6.postProcessing.averaging import PlanarAverages
 
     # read all time directories in current working directory
     averagingData = PlanarAverages()
