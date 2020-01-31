@@ -35,7 +35,7 @@ class Reader(object):
         data = Reader('postProcessing/<postProcessingTypeName>/')
 
         # read specified fields only
-        data = Reader('postProcessing/<postProcessingTypeName>/',fields=['U','T'])
+        data = Reader('postProcessing/<postProcessingTypeName>/',varList=['U','T'])
 
         data.to_csv('data.csv')
 
