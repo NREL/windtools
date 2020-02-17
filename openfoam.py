@@ -12,7 +12,7 @@
 import re
 
 
-class InputFile(object):
+class InputFile(dict):
     """Object to parse and store openfoam input file data
     
     Includes support for parsing:
@@ -45,7 +45,6 @@ class InputFile(object):
     ]
 
     def __init__(self,fpath):
-        self._properties = {}
         # read full file
         with open(fpath) as f:
             lines = f.readlines()
@@ -88,7 +87,7 @@ class InputFile(object):
     def __repr__(self):
         descstrs = [
             '{:s} : {:s}'.format(key, self._format_item_str(val))
-            for key,val in self._properties.items()
+            for key,val in self.items()
         ]
         return '\n'.join(descstrs)
 
@@ -211,17 +210,18 @@ class InputFile(object):
             if self.DEBUG:
                 print(name,'-->',defn)
             if parent is None:
-                self._properties[name] = defn
+                self.__setitem__(name, defn)
             elif isinstance(parent, dict):
                 parent[name] = defn
             else:
+                assert isinstance(parent, list)
                 parent.append(defn)
         else:
             # we have a subblock, create new container
             if parent is None:
                 # parent is the InputFile object
-                self._properties[name] = containertype()
-                newparent = self._properties[name]
+                self.__setitem__(name, containertype())
+                newparent = self.__getitem__(name)
             elif isinstance(parent, dict):
                 # parent is a dictionary
                 if self.DEBUG:
@@ -246,17 +246,4 @@ class InputFile(object):
             else:
                 for newname,newdef,newcontainertype in self._split_defs(newdefn):
                     self._parse(newname,newdef,newcontainertype,parent=newparent)
-
-
-    """
-    dictionary-like functions
-    """
-    def __getitem__(self, key):
-        return self._properties[key]
-
-    def keys(self):
-        return self._properties.keys()
-
-    def items(self):
-        return self._properties.items()
 
