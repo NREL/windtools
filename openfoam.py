@@ -25,6 +25,7 @@ class InputFile(object):
     block_defs = [
         ('{','}',dict),
         ('(',')',list),
+        ('[',']',list),
     ]
     true_values = [
         'true',
