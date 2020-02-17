@@ -12,7 +12,7 @@
 import re
 
 
-class InputFile(object):
+class InputFile(dict):
     """Object to parse and store openfoam input file data
     
     Includes support for parsing:
@@ -25,6 +25,7 @@ class InputFile(object):
     block_defs = [
         ('{','}',dict),
         ('(',')',list),
+        ('[',']',list),
     ]
     true_values = [
         'true',
@@ -37,9 +38,13 @@ class InputFile(object):
         'no',
         'none',
     ]
+    special_keywords = [
+        'uniform',
+        'nonuniform',
+        'table',
+    ]
 
     def __init__(self,fpath):
-        self._properties = {}
         # read full file
         with open(fpath) as f:
             lines = f.readlines()
@@ -70,7 +75,7 @@ class InputFile(object):
         txt = txt.strip()
         for name,line,containertype in self._split_defs(txt):
             if self.DEBUG:
-                print('PARSING',name,'FROM',line,'of TYPE',containertype)
+                print('\nPARSING',name,'FROM',line,'of TYPE',containertype)
             self._parse(name,line,containertype)
 
     def _format_item_str(self,val,maxstrlen=60):
@@ -82,7 +87,7 @@ class InputFile(object):
     def __repr__(self):
         descstrs = [
             '{:s} : {:s}'.format(key, self._format_item_str(val))
-            for key,val in self._properties.items()
+            for key,val in self.items()
         ]
         return '\n'.join(descstrs)
 
@@ -98,6 +103,9 @@ class InputFile(object):
         """
         names, lines, container = [], [], []
         while len(txt) > 0:
+            if self.DEBUG:
+                print('current text:',txt)
+
             if (txt[0] == '('):
                 # special treatment for lists, or lists within a list
                 name = None
@@ -107,6 +115,7 @@ class InputFile(object):
                 name = txt[:idx]
                 if self.DEBUG: print('name=',name)
                 txt = txt[idx+1:].strip()
+
             # - find next word (either a value/block)
             idx = txt.find(' ')
             if idx < 0:
@@ -116,6 +125,14 @@ class InputFile(object):
                 if self.DEBUG: print('EOF',string)
             else:
                 string = txt[:idx].strip()
+                if string in self.special_keywords:
+                    # append special keyword to name and read the next word
+                    name += '_'+string
+                    txt = txt[idx+1:].strip()
+                    idx = txt.find(' ')
+                    assert (idx > 0), 'problem parsing '+string+' field'
+                    string = txt[:idx].strip()
+
             if string.endswith(';'):
                 # found single definition
                 if self.DEBUG: print('value=',string[:-1])
@@ -124,6 +141,7 @@ class InputFile(object):
                 container.append(None)
             else:
                 # found block
+                if self.DEBUG: print('current string:',string)
                 blockstart = string[0]
                 blockend = None
                 blocktype = None
@@ -136,13 +154,14 @@ class InputFile(object):
                 # find end of block
                 idx = txt.find(blockend) + 1
                 assert (idx > 0), 'Mismatched input block'
+                # consolidate spaces
                 blockdef = re.sub(' +',' ',txt[:idx].strip())
                 Nopen = blockdef.count(blockstart)
                 Nclose = blockdef.count(blockend)
                 while Nopen != Nclose:
                     if self.DEBUG:
                         print('  incomplete:',blockdef)
-                    idx = txt.find(blockend, idx+1) + 1
+                    idx = txt.find(blockend, idx) + 1
                     blockdef = txt[:idx].strip()
                     Nopen = blockdef.count(blockstart)
                     Nclose = blockdef.count(blockend)
@@ -154,6 +173,7 @@ class InputFile(object):
             if self.DEBUG: print('container type=',container[-1])
             # trim text block
             txt = txt[idx+1:].strip()
+
         return zip(names, lines, container)
 
     def _parse(self,name,defn,containertype,parent=None):
@@ -175,51 +195,40 @@ class InputFile(object):
         defn = defn.strip()
         if containertype is None:
             # set single value in parent 
-            assert(defn.find(' ') < 0)
-            try:
-                # attempt float cast
-                defn = float(defn)
-            except ValueError:
-                # THIS IS A TRAP
-                #try:
-                #    # attempt boolean cast
-                #    defn = bool(defn)
-                #except ValueError:
-                #    # default to string
-                #    pass
-                if defn.lower() in self.true_values:
-                    defn = True
-                elif defn.lower() in self.false_values:
-                    defn = False
-                else:
-                    # default to string
-                    defn = defn.strip('"')
-                    defn = defn.strip('\'')
+            defn = self._try_cast(defn)
             # SET VALUE HERE
             if self.DEBUG:
                 print(name,'-->',defn)
             if parent is None:
-                self._properties[name] = defn
+                self.__setitem__(name, defn)
             elif isinstance(parent, dict):
                 parent[name] = defn
             else:
+                assert isinstance(parent, list)
                 parent.append(defn)
         else:
             # we have a subblock, create new container
             if parent is None:
                 # parent is the InputFile object
-                self._properties[name] = containertype()
-                newparent = self._properties[name]
+                if self.DEBUG:
+                    print('CREATING',containertype,'named',name)
+                self.__setitem__(name, containertype())
+                newparent = self.__getitem__(name)
             elif isinstance(parent, dict):
                 # parent is a dictionary
                 if self.DEBUG:
-                    print('add dictionary entry,',name)
+                    print('ADDING dictionary entry,',name)
                 parent[name] = containertype()
                 newparent = parent[name]
             else:
-                if self.DEBUG:
-                    print('add list item,',name)
+                assert isinstance(parent, list)
                 # parent is a list
+                if self.DEBUG:
+                    print('ADDING list item, name=',name)
+                if name is not None:
+                    # if we have nested nists with mixed types we could
+                    # end up here...
+                    parent.append(self._try_cast(name))
                 newparent = containertype()
                 parent.append(newparent)
             newdefn = defn[1:-1].strip()
@@ -235,16 +244,25 @@ class InputFile(object):
                 for newname,newdef,newcontainertype in self._split_defs(newdefn):
                     self._parse(newname,newdef,newcontainertype,parent=newparent)
 
-
-    """
-    dictionary-like functions
-    """
-    def __getitem__(self, key):
-        return self._properties[key]
-
-    def keys(self):
-        return self._properties.keys()
-
-    def items(self):
-        return self._properties.items()
-
+    def _try_cast(self,s):
+        assert(s.find(' ') < 0)
+        try:
+            # attempt float cast
+            s = float(s)
+        except ValueError:
+            # THIS IS A TRAP
+            #try:
+            #    # attempt boolean cast
+            #    s = bool(s)
+            #except ValueError:
+            #    # default to string
+            #    pass
+            if s.lower() in self.true_values:
+                s = True
+            elif s.lower() in self.false_values:
+                s = False
+            else:
+                # default to string
+                s = s.strip('"')
+                s = s.strip('\'')
+        return s

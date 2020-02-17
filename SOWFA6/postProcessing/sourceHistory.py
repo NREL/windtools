@@ -10,7 +10,7 @@
 # specific language governing permissions and limitations under the License.
 
 """
-For processing SOWFA driving force data in postProcessing/SourceHistory
+For processing SOWFA-6 driving force data in postProcessing/SourceHistory
 Based on averaging.py written by Eliot Quon
 
 written by Dries Allaerts (dries.allaerts@nrel.gov)
@@ -19,7 +19,7 @@ The class can handle both height-dependent and constant source files
 
 Sample usage:
 
-    from datatools.SOWFA6.postProcessing.sourceHistory import SourceHistory
+    from windtools.SOWFA6.postProcessing.sourceHistory import SourceHistory
 
     # read all time directories in current working directory or in subdirectory called 'SourceHistory'
     srcData = SourceHistory()
