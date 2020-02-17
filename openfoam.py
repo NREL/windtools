@@ -20,7 +20,7 @@ class InputFile(dict):
     - lists
     - dictionaries
     """
-    DEBUG = True
+    DEBUG = False
 
     block_defs = [
         ('{','}',dict),
@@ -222,9 +222,13 @@ class InputFile(dict):
                 newparent = parent[name]
             else:
                 assert isinstance(parent, list)
-                if self.DEBUG:
-                    print('ADDING list item,',name)
                 # parent is a list
+                if self.DEBUG:
+                    print('ADDING list item, name=',name)
+                if name is not None:
+                    # if we have nested nists with mixed types we could
+                    # end up here...
+                    parent.append(self._try_cast(name))
                 newparent = containertype()
                 parent.append(newparent)
             newdefn = defn[1:-1].strip()
