@@ -195,26 +195,7 @@ class InputFile(dict):
         defn = defn.strip()
         if containertype is None:
             # set single value in parent 
-            assert(defn.find(' ') < 0)
-            try:
-                # attempt float cast
-                defn = float(defn)
-            except ValueError:
-                # THIS IS A TRAP
-                #try:
-                #    # attempt boolean cast
-                #    defn = bool(defn)
-                #except ValueError:
-                #    # default to string
-                #    pass
-                if defn.lower() in self.true_values:
-                    defn = True
-                elif defn.lower() in self.false_values:
-                    defn = False
-                else:
-                    # default to string
-                    defn = defn.strip('"')
-                    defn = defn.strip('\'')
+            defn = self._try_cast(defn)
             # SET VALUE HERE
             if self.DEBUG:
                 print(name,'-->',defn)
@@ -259,3 +240,25 @@ class InputFile(dict):
                 for newname,newdef,newcontainertype in self._split_defs(newdefn):
                     self._parse(newname,newdef,newcontainertype,parent=newparent)
 
+    def _try_cast(self,s):
+        assert(s.find(' ') < 0)
+        try:
+            # attempt float cast
+            s = float(s)
+        except ValueError:
+            # THIS IS A TRAP
+            #try:
+            #    # attempt boolean cast
+            #    s = bool(s)
+            #except ValueError:
+            #    # default to string
+            #    pass
+            if s.lower() in self.true_values:
+                s = True
+            elif s.lower() in self.false_values:
+                s = False
+            else:
+                # default to string
+                s = s.strip('"')
+                s = s.strip('\'')
+        return s
