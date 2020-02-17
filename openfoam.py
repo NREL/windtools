@@ -38,6 +38,11 @@ class InputFile(object):
         'no',
         'none',
     ]
+    special_keywords = [
+        'uniform',
+        'nonuniform',
+        'table',
+    ]
 
     def __init__(self,fpath):
         self._properties = {}
@@ -117,6 +122,12 @@ class InputFile(object):
                 if self.DEBUG: print('EOF',string)
             else:
                 string = txt[:idx].strip()
+                if string in self.special_keywords:
+                    name += '_'+string
+                    txt = txt[idx+1:].strip()
+                    idx = txt.find(' ')
+                    assert (idx > 0), 'problem parsing '+string+' field'
+                    string = txt[:idx].strip()
             if string.endswith(';'):
                 # found single definition
                 if self.DEBUG: print('value=',string[:-1])
