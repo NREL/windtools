@@ -20,7 +20,7 @@ class InputFile(dict):
     - lists
     - dictionaries
     """
-    DEBUG = False
+    DEBUG = True
 
     block_defs = [
         ('{','}',dict),
@@ -75,7 +75,7 @@ class InputFile(dict):
         txt = txt.strip()
         for name,line,containertype in self._split_defs(txt):
             if self.DEBUG:
-                print('PARSING',name,'FROM',line,'of TYPE',containertype)
+                print('\nPARSING',name,'FROM',line,'of TYPE',containertype)
             self._parse(name,line,containertype)
 
     def _format_item_str(self,val,maxstrlen=60):
@@ -103,6 +103,9 @@ class InputFile(dict):
         """
         names, lines, container = [], [], []
         while len(txt) > 0:
+            if self.DEBUG:
+                print('current text:',txt)
+
             if (txt[0] == '('):
                 # special treatment for lists, or lists within a list
                 name = None
@@ -112,6 +115,7 @@ class InputFile(dict):
                 name = txt[:idx]
                 if self.DEBUG: print('name=',name)
                 txt = txt[idx+1:].strip()
+
             # - find next word (either a value/block)
             idx = txt.find(' ')
             if idx < 0:
@@ -122,11 +126,13 @@ class InputFile(dict):
             else:
                 string = txt[:idx].strip()
                 if string in self.special_keywords:
+                    # append special keyword to name and read the next word
                     name += '_'+string
                     txt = txt[idx+1:].strip()
                     idx = txt.find(' ')
                     assert (idx > 0), 'problem parsing '+string+' field'
                     string = txt[:idx].strip()
+
             if string.endswith(';'):
                 # found single definition
                 if self.DEBUG: print('value=',string[:-1])
@@ -135,6 +141,7 @@ class InputFile(dict):
                 container.append(None)
             else:
                 # found block
+                if self.DEBUG: print('current string:',string)
                 blockstart = string[0]
                 blockend = None
                 blocktype = None
@@ -147,13 +154,14 @@ class InputFile(dict):
                 # find end of block
                 idx = txt.find(blockend) + 1
                 assert (idx > 0), 'Mismatched input block'
+                # consolidate spaces
                 blockdef = re.sub(' +',' ',txt[:idx].strip())
                 Nopen = blockdef.count(blockstart)
                 Nclose = blockdef.count(blockend)
                 while Nopen != Nclose:
                     if self.DEBUG:
                         print('  incomplete:',blockdef)
-                    idx = txt.find(blockend, idx+1) + 1
+                    idx = txt.find(blockend, idx) + 1
                     blockdef = txt[:idx].strip()
                     Nopen = blockdef.count(blockstart)
                     Nclose = blockdef.count(blockend)
@@ -165,6 +173,7 @@ class InputFile(dict):
             if self.DEBUG: print('container type=',container[-1])
             # trim text block
             txt = txt[idx+1:].strip()
+
         return zip(names, lines, container)
 
     def _parse(self,name,defn,containertype,parent=None):
@@ -220,17 +229,20 @@ class InputFile(dict):
             # we have a subblock, create new container
             if parent is None:
                 # parent is the InputFile object
+                if self.DEBUG:
+                    print('CREATING',containertype,'named',name)
                 self.__setitem__(name, containertype())
                 newparent = self.__getitem__(name)
             elif isinstance(parent, dict):
                 # parent is a dictionary
                 if self.DEBUG:
-                    print('add dictionary entry,',name)
+                    print('ADDING dictionary entry,',name)
                 parent[name] = containertype()
                 newparent = parent[name]
             else:
+                assert isinstance(parent, list)
                 if self.DEBUG:
-                    print('add list item,',name)
+                    print('ADDING list item,',name)
                 # parent is a list
                 newparent = containertype()
                 parent.append(newparent)
