@@ -44,10 +44,25 @@ class InputFile(dict):
         'table',
     ]
 
-    def __init__(self,fpath):
+    def __init__(self,fpath,nodef=False):
+        """Create a dictionary of definitions from an OpenFOAM-style
+        input file.
+
+        Inputs
+        ------
+        fpath : str
+            Path to OpenFOAM file
+        nodef : bool, optional
+            If the file only contains OpenFOAM data, e.g., a table of 
+            vector values to be included from another OpenFOAM file,
+            then create a generic 'data' parent object to contain the
+            file data.
+        """
         # read full file
         with open(fpath) as f:
             lines = f.readlines()
+        if nodef:
+            lines = ['data ('] + lines + [')']
         # trim single-line comments and remove directives
         for i,line in enumerate(lines):
             line = line.strip()
@@ -73,10 +88,19 @@ class InputFile(dict):
         txt = txt.replace('\n',' ')
         txt = txt.replace('\t',' ')
         txt = txt.strip()
+        # now parse each line
         for name,line,containertype in self._split_defs(txt):
             if self.DEBUG:
                 print('\nPARSING',name,'FROM',line,'of TYPE',containertype)
             self._parse(name,line,containertype)
+        self._sanitycheck()
+
+    def _sanitycheck(self):
+        """Make sure the InputFile was read properly"""
+        noparent = [key is None for key in self.keys()]
+        if any(noparent):
+            print('Definitions improperly read, some values without keys')
+            print('If you believe this is an error, then re-run with the nodef keyword')
 
     def _format_item_str(self,val,maxstrlen=60):
         printval = str(val)
