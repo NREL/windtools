@@ -44,10 +44,25 @@ class InputFile(dict):
         'table',
     ]
 
-    def __init__(self,fpath):
+    def __init__(self,fpath,nodef=False):
+        """Create a dictionary of definitions from an OpenFOAM-style
+        input file.
+
+        Inputs
+        ------
+        fpath : str
+            Path to OpenFOAM file
+        nodef : bool, optional
+            If the file only contains OpenFOAM data, e.g., a table of 
+            vector values to be included from another OpenFOAM file,
+            then create a generic 'data' parent object to contain the
+            file data.
+        """
         # read full file
         with open(fpath) as f:
             lines = f.readlines()
+        if nodef:
+            lines = ['data ('] + lines + [')']
         # trim single-line comments and remove directives
         for i,line in enumerate(lines):
             line = line.strip()
