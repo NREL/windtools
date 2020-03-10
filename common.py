@@ -131,3 +131,55 @@ def fit_powerlaw(df=None,z=None,U=None,zref=80.0,Uref=None):
     return alpha.squeeze(), R2.squeeze()
 
 
+def covariance(a,b,interval='10min',resample=False,**kwargs):
+    """Calculate covariance between two series (with datetime index) in
+    the specified interval, where the interval is defined by a pandas
+    offset string
+    (http://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects).
+
+    Notes:
+    - The output data will have the same length as the input data by
+      default, because statistics are calculated with pd.rolling(). To
+      return data at the same intervals as specified, set
+      `resample=True`.
+    - Covariances may be simultaneously calculated at multiple heights
+      by inputting multi-indexed dataframes (with height being the
+      second index level)
+    - If the inputs have multiindices, this function will return a
+      stacked, multi-indexed dataframe.
+
+    Example:
+        heatflux = covariance(df['Ts'],df['w'],'10min')
+    """
+    # handle multiindices
+    have_multiindex = False
+    if isinstance(a.index, pd.MultiIndex):
+        assert isinstance(b.index, pd.MultiIndex), \
+               'Both a and b should have multiindices'
+        assert len(a.index.levels) == 2
+        assert len(b.index.levels) == 2
+        # assuming levels 0 and 1 are time and height, respectively
+        a = a.unstack() # create unstacked copy
+        b = b.unstack() # create unstacked copy
+        have_multiindex = True
+    elif isinstance(b.index, pd.MultiIndex):
+        raise AssertionError('Both a and b should have multiindices')
+    # check index
+    if isinstance(interval, str):
+        # make sure we have a compatible index
+        assert isinstance(a.index, (pd.DatetimeIndex, pd.TimedeltaIndex, pd.PeriodIndex))
+        assert isinstance(b.index, (pd.DatetimeIndex, pd.TimedeltaIndex, pd.PeriodIndex))
+    # now, do the calculations
+    if resample:
+        a_mean = a.resample(interval).mean()
+        b_mean = b.resample(interval).mean()
+        ab_mean = (a*b).resample(interval,**kwargs).mean()
+    else:
+        a_mean = a.rolling(interval).mean()
+        b_mean = b.rolling(interval).mean()
+        ab_mean = (a*b).rolling(interval,**kwargs).mean()
+    cov = ab_mean - a_mean*b_mean
+    if have_multiindex:
+        return cov.stack()
+    else:
+        return cov
