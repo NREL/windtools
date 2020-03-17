@@ -13,7 +13,7 @@ import sys,os
 import time
 import numpy as np
 
-from .inflowplane import InflowPlane
+from .general import InflowPlane
 
 
 class TurbSim(InflowPlane):
