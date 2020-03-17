@@ -14,6 +14,8 @@ import re
 
 class InputFile(dict):
     """Object to parse and store openfoam input file data
+
+    Written by Eliot Quon (eliot.quon@nrel.gov)
     
     Includes support for parsing:
     - single values, with attempted cast to float/bool

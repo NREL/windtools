@@ -23,7 +23,7 @@ class BinaryFile:
         Sample Usage
         ------------
         ```
-        from windtools.io import BinaryFile
+        from windtools.io.binary import BinaryFile
         with BinaryFile(fname) as f:
             i = f.read_int4()
             f = f.read_float()

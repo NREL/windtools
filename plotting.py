@@ -11,6 +11,8 @@
 
 """
 Library of standardized plotting functions for basic plot formats
+
+Written by Dries Allaerts (dries.allaerts@nrel.gov)
 """
 
 import numpy as np
