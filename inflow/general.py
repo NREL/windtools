@@ -13,9 +13,9 @@ import sys,os
 import time
 import numpy as np
 
-import ..SOWFA6.constant.boundaryData as bc
-from ..io.binary import BinaryFile
-from ..io.vtk import vtk_write_structured_points
+import windtools.SOWFA6.constant.boundaryData as bc
+from windtools.io.binary import BinaryFile
+from windtools.io.vtk import vtk_write_structured_points
 
 
 class InflowPlane(object):
