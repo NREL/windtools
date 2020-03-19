@@ -151,6 +151,11 @@ def covariance(a,b,interval='10min',resample=False,**kwargs):
     Example:
         heatflux = covariance(df['Ts'],df['w'],'10min')
     """
+    # handle xarray data arrays
+    if isinstance(a, xr.DataArray):
+        a = a.to_pandas()
+    if isinstance(b, xr.DataArray):
+        b = b.to_pandas()
     # handle multiindices
     have_multiindex = False
     if isinstance(a.index, pd.MultiIndex):
