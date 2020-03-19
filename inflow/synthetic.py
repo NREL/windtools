@@ -14,6 +14,7 @@ import time
 import numpy as np
 
 from .general import InflowPlane
+from windtools.io.binary import BinaryFile
 
 
 class TurbSim(InflowPlane):

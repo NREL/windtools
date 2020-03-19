@@ -14,7 +14,6 @@ import time
 import numpy as np
 
 import windtools.SOWFA6.constant.boundaryData as bc
-from windtools.io.binary import BinaryFile
 from windtools.io.vtk import vtk_write_structured_points
 
 
