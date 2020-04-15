@@ -33,6 +33,7 @@ def to_InflowWind(ds, outdir):
     (x is streamwise, z is up) and with variables 'u','v', and 'w' corresponding
     to the velocity components.
     """
+    ds = ds.sortby(['t','y','z'])
     Nt = ds.dims['t']
     Ny = ds.dims['y']
     Nz = ds.dims['z']
