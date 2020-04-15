@@ -12,7 +12,7 @@
 import os
 import struct
 
-def to_InflowWind(ds, outdir):
+def to_InflowWind(ds, outdir='.', prefix=''):
     """Write out Binary HAWC-Style Full-Field Files
 
     From the InflowWind manual:
@@ -33,13 +33,14 @@ def to_InflowWind(ds, outdir):
     (x is streamwise, z is up) and with variables 'u','v', and 'w' corresponding
     to the velocity components.
     """
-    ds = ds.sortby(['t','y','z'])
+    dims = ['t','y','z']
+    ds = ds.sortby(dims).transpose(*dims)
     Nt = ds.dims['t']
     Ny = ds.dims['y']
     Nz = ds.dims['z']
     fmtstr = '{:d}f'.format(Nz)
     for varname in ['u','v','w']:
-        fpath = os.path.join(outdir, varname+'.bin')
+        fpath = os.path.join(outdir, prefix+varname+'.bin')
         with open(fpath,'wb') as f:
             data = ds[varname].values
             # file format (from InflowWind manual):
