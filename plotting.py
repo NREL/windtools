@@ -25,39 +25,71 @@ from scipy.interpolate import interp1d
 from scipy.signal import welch
 
 # Standard field labels
-standard_fieldlabels = {'wspd': r'Wind speed [m/s]',
-                        'wdir': r'Wind direction $[^\circ]$',
-                        'u': r'u [m/s]',
-                        'v': r'v [m/s]',
-                        'w': r'Vertical wind speed [m/s]',
-                        'theta': r'$\theta$ [K]',
-                        'thetav': r'$\theta_v$ [K]',
-                        'uu': r'$\langle u^\prime u^\prime \rangle \;[\mathrm{m^2/s^2}]$',
-                        'vv': r'$\langle v^\prime v^\prime \rangle \;[\mathrm{m^2/s^2}]$',
-                        'ww': r'$\langle w^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',
-                        'uv': r'$\langle u^\prime v^\prime \rangle \;[\mathrm{m^2/s^2}]$',
-                        'uw': r'$\langle u^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',
-                        'vw': r'$\langle v^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',
-                        'tw': r'$\langle w^\prime \theta^\prime \rangle \;[\mathrm{Km/s}]$',
-                        'TI': r'TI $[-]$',
-                        'TKE': r'TKE $[\mathrm{m^2/s^2}]$',
-                        }
+# - default: e.g., "Km/s"
+# - all superscript: e.g., "K m s^{-1}"
+fieldlabels_default_units = {
+    'wspd': r'Wind speed [m/s]',
+    'wdir': r'Wind direction [$^\circ$]',
+    'u': r'u [m/s]',
+    'v': r'v [m/s]',
+    'w': r'Vertical wind speed [m/s]',
+    'theta': r'$\theta$ [K]',
+    'thetav': r'$\theta_v$ [K]',
+    'uu': r'$\langle u^\prime u^\prime \rangle \;[\mathrm{m^2/s^2}]$',
+    'vv': r'$\langle v^\prime v^\prime \rangle \;[\mathrm{m^2/s^2}]$',
+    'ww': r'$\langle w^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',
+    'uv': r'$\langle u^\prime v^\prime \rangle \;[\mathrm{m^2/s^2}]$',
+    'uw': r'$\langle u^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',
+    'vw': r'$\langle v^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',
+    'tw': r'$\langle w^\prime \theta^\prime \rangle \;[\mathrm{Km/s}]$',
+    'TI': r'TI $[-]$',
+    'TKE': r'TKE $[\mathrm{m^2/s^2}]$',
+}
+fieldlabels_superscript_units = {
+    'wspd': r'Wind speed [m s$^{-1}$]',
+    'wdir': r'Wind direction [$^\circ$]',
+    'u': r'u [m s$^{-1}$]',
+    'v': r'v [m s$^{-1}$]',
+    'w': r'Vertical wind speed [m s$^{-1}$]',
+    'theta': r'$\theta$ [K]',
+    'thetav': r'$\theta_v$ [K]',
+    'uu': r'$\langle u^\prime u^\prime \rangle \;[\mathrm{m^2 s^{-2}}]$',
+    'vv': r'$\langle v^\prime v^\prime \rangle \;[\mathrm{m^2 s^{-2}}]$',
+    'ww': r'$\langle w^\prime w^\prime \rangle \;[\mathrm{m^2 s^{-2}}]$',
+    'uv': r'$\langle u^\prime v^\prime \rangle \;[\mathrm{m^2 s^{-2}}]$',
+    'uw': r'$\langle u^\prime w^\prime \rangle \;[\mathrm{m^2 s^{-2}}]$',
+    'vw': r'$\langle v^\prime w^\prime \rangle \;[\mathrm{m^2 s^{-2}}]$',
+    'tw': r'$\langle w^\prime \theta^\prime \rangle \;[\mathrm{K m s^{-1}}]$',
+    'TI': r'TI $[-]$',
+    'TKE': r'TKE $[\mathrm{m^2 s^{-2}}]$',
+}
 
 # Standard field labels for frequency spectra
-standard_spectrumlabels = {'u': r'$E_{uu}\;[\mathrm{m^2/s}]$',
-                           'v': r'$E_{vv}\;[\mathrm{m^2/s}]$',
-                           'w': r'$E_{ww}\;[\mathrm{m^2/s}]$',
-                           'theta': r'$E_{\theta\theta}\;[\mathrm{K^2 s}]$',
-                           'thetav': r'$E_{\theta\theta}\;[\mathrm{K^2 s}]$',
-                           'wspd': r'$E_{UU}\;[\mathrm{m^2/s}]$',
-                           }
+spectrumlabels_default_units = {
+    'u': r'$E_{uu}\;[\mathrm{m^2/s}]$',
+    'v': r'$E_{vv}\;[\mathrm{m^2/s}]$',
+    'w': r'$E_{ww}\;[\mathrm{m^2/s}]$',
+    'theta': r'$E_{\theta\theta}\;[\mathrm{K^2 s}]$',
+    'thetav': r'$E_{\theta\theta}\;[\mathrm{K^2 s}]$',
+    'wspd': r'$E_{UU}\;[\mathrm{m^2/s}]$',
+}
+spectrumlabels_superscript_units = {
+    'u': r'$E_{uu}\;[\mathrm{m^2 s^{-1}}]$',
+    'v': r'$E_{vv}\;[\mathrm{m^2 s^{-1}}]$',
+    'w': r'$E_{ww}\;[\mathrm{m^2 s^{-1}}]$',
+    'theta': r'$E_{\theta\theta}\;[\mathrm{K^2 s}]$',
+    'thetav': r'$E_{\theta\theta}\;[\mathrm{K^2 s}]$',
+    'wspd': r'$E_{UU}\;[\mathrm{m^2 s^{-1}}]$',
+}
 
-# Default color cycle
+# Default settings
 default_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+standard_fieldlabels = fieldlabels_default_units
+standard_spectrumlabels = spectrumlabels_default_units
 
 # Supported dimensions and associated names
 dimension_names = {
-    'time':      ['time','Time','datetime'],
+    'time':      ['datetime','time','Time'],
     'height':    ['height','heights','z'],
     'frequency': ['frequency','f',]
 }
@@ -132,8 +164,10 @@ def plot_timeheight(datasets,
         number of axes.
     subfigsize : list or tuple
         Standard size of subfigures
-    plot_local_time : bool
-        Plot dual x axes with both UTC time and local time
+    plot_local_time : bool or str
+        Plot dual x axes with both UTC time and local time. If a str is
+        provided, then plot_local_time is assumed to be True and the str
+        is used as the datetime format.
     local_time_offset : float
         Local time offset from UTC
     datasetkwargs : dict
@@ -195,7 +229,7 @@ def plot_timeheight(datasets,
 
         if isinstance(timevalues, pd.DatetimeIndex):
             # If plot local time, shift timevalues
-            if plot_local_time:
+            if plot_local_time is not False:
                 timevalues = timevalues + pd.to_timedelta(local_time_offset,'h')
 
             # Convert to days since 0001-01-01 00:00 UTC, plus one
@@ -302,7 +336,7 @@ def plot_timeheight(datasets,
     if len(cbars)==1:
         cbars=cbars[0]
 
-    if plot_local_time and  ax2 is not None:
+    if (plot_local_time is not False) and ax2 is not None:
         return fig, ax, ax2, cbars
     else:
         return fig, ax, cbars
@@ -385,8 +419,10 @@ def plot_timehistory_at_height(datasets,
         number of axes.
     subfigsize : list or tuple
         Standard size of subfigures
-    plot_local_time : bool
-        Plot dual x axes with both UTC time and local time
+    plot_local_time : bool or str
+        Plot dual x axes with both UTC time and local time. If a str is
+        provided, then plot_local_time is assumed to be True and the str
+        is used as the datetime format.
     local_time_offset : float
         Local time offset from UTC
     datasetkwargs : dict
@@ -467,7 +503,8 @@ def plot_timehistory_at_height(datasets,
             timevalues = timevalues.total_seconds()
 
         # If plot local time, shift timevalues
-        if plot_local_time and isinstance(timevalues, (pd.DatetimeIndex, pd.TimedeltaIndex)):
+        if (plot_local_time is not False) and \
+                isinstance(timevalues, (pd.DatetimeIndex, pd.TimedeltaIndex)):
             timevalues = timevalues + pd.to_timedelta(local_time_offset,'h')
 
         # Create list with available fields only
@@ -591,7 +628,7 @@ def plot_timehistory_at_height(datasets,
     # Align labels
     _align_labels(fig,axv,nrows,ncols)
 
-    if plot_local_time and ax2 is not None:
+    if (plot_local_time is not False) and ax2 is not None:
         return fig, ax, ax2
     else:
         return fig, ax
@@ -600,6 +637,7 @@ def plot_timehistory_at_height(datasets,
 def plot_profile(datasets,
                  fields=None,
                  times=None,
+                 timerange=None,
                  fig=None,ax=None,
                  fieldlimits=None,
                  heightlimits=None,
@@ -637,7 +675,11 @@ def plot_profile(datasets,
         Time(s) for which vertical profiles are plotted, specified as
         either datetime strings or numerical values (seconds, e.g.,
         simulation time). times can be None if all datasets combined
-        have no more than one time value.
+        have no more than one time value, or if timerange is specified.
+    timerange : tuple or list
+        Start and end times (inclusive) between which all times are
+        plotted. If cmap is None, then it will automatically be set to
+        viridis by default. This overrides times when specified.
     fig : figure handle
         Custom figure handle. Should be specified together with ax
     ax : axes handle, or list or numpy ndarray with axes handles
@@ -694,6 +736,7 @@ def plot_profile(datasets,
         datasets=datasets,
         fields=fields,
         times=times,
+        timerange=timerange,
         fieldlimits=fieldlimits,
         fieldlabels=fieldlabels,
         fieldorder=fieldorder,
@@ -741,6 +784,10 @@ def plot_profile(datasets,
             showlegend = True
         else:
             showlegend = False
+
+    # Set default sequential colormap if timerange was specified
+    if (timerange is not None) and (cmap is None):
+        cmap = 'viridis'
 
     # Loop over datasets, fields and times 
     for i, dfname in enumerate(args.datasets):
@@ -1215,6 +1262,33 @@ class PlottingInput(object):
         except AttributeError:
             pass
 
+        # -----------------------------------
+        # Check timerange argument (optional)
+        # -----------------------------------
+        try:
+            if self.timerange is not None:
+                if self.times is not None:
+                    print('Using specified time range',self.timerange,
+                          'and ignoring',self.times)
+                assert isinstance(self.timerange,(tuple,list)), \
+                        'Need to specify timerange as (starttime,endtime)'
+                assert (len(self.timerange) == 2)
+                try:
+                    starttime = pd.to_datetime(self.timerange[0])
+                    endtime = pd.to_datetime(self.timerange[1])
+                except ValueError:
+                    print('Unable to convert timerange to timestamps')
+                else:
+                    # get unique times from all datasets
+                    alltimes = []
+                    for df in self.datasets.values():
+                        alltimes += list(_get_dim_values(df,'time'))
+                    alltimes = pd.DatetimeIndex(np.unique(alltimes))
+                    inrange = (alltimes >= starttime) & (alltimes <= endtime)
+                    self.times = alltimes[inrange]
+        except AttributeError:
+            pass
+
         # ---------------------------------
         # Check times argument (optional)
         # ---------------------------------
@@ -1596,11 +1670,18 @@ def _format_time_axis(fig,ax,
     Auxiliary function to format time axis
     """
     ax[-1].xaxis_date()
+    if timelimits is not None:
+        timelimits = [pd.to_datetime(tlim) for tlim in timelimits]
     hour_interval = _determine_hourlocator_interval(ax[-1],timelimits)
-    if plot_local_time:
+    if plot_local_time is not False:
+        if plot_local_time is True:
+            localtimefmt = '%I %p'
+        else:
+            assert isinstance(plot_local_time,str), 'Unexpected plot_local_time format'
+            localtimefmt = plot_local_time
         # Format first axis (local time)
         ax[-1].xaxis.set_minor_locator(mdates.HourLocator(byhour=range(0,24,hour_interval)))
-        ax[-1].xaxis.set_minor_formatter(mdates.DateFormatter('%I %p'))
+        ax[-1].xaxis.set_minor_formatter(mdates.DateFormatter(localtimefmt))
         ax[-1].xaxis.set_major_locator(mdates.DayLocator(interval=12)) #Choose large interval so dates are not plotted
         ax[-1].xaxis.set_major_formatter(mdates.DateFormatter(''))
 
@@ -1726,3 +1807,4 @@ def _align_labels(fig,ax,nrows,ncols):
     # Align ylabels column by column
     for c in range(ncols):
         fig.align_ylabels(ax[c::ncols])
+
