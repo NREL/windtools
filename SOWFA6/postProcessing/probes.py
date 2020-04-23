@@ -42,6 +42,8 @@ class Probe(Reader):
 
     """
     def __init__(self,dpath=None,**kwargs):
+        if 'fields' in kwargs.keys():
+            kwargs['varList'] = kwargs.pop('fields')
         super().__init__(dpath,**kwargs)
 
     def _processdirs(self,
