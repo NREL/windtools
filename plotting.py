@@ -1808,3 +1808,29 @@ def _align_labels(fig,ax,nrows,ncols):
     for c in range(ncols):
         fig.align_ylabels(ax[c::ncols])
 
+
+def reference_lines(x_range, y_start, slopes, line_type='log'):
+    '''
+    This will generate an array of y-values over a specified x-range for
+    the provided slopes. All lines will start from the specified
+    location. For now, this is only assumed useful for log-log plots.
+    x_range : array
+        values over which to plot the lines (requires 2 or more values)
+    y_start : float
+        where the lines will start in y
+    slopes : float or array
+        the slopes to be plotted (can be 1 or several)
+    '''
+    if type(slopes)==float:
+        y_range = np.asarray(x_range)**slopes
+        shift = y_start/y_range[0]
+        y_range = y_range*shift
+    elif isinstance(slopes,(list,np.ndarray)):
+        y_range = np.zeros((np.shape(x_range)[0],np.shape(slopes)[0]))
+        for ss,slope in enumerate(slopes):
+            y_range[:,ss] = np.asarray(x_range)**slope
+            shift = y_start/y_range[0,ss]
+            y_range[:,ss] = y_range[:,ss]*shift
+    return(y_range)
+
+
