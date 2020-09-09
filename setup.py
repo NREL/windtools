@@ -19,6 +19,7 @@ specific language governing permissions and limitations under the License.
 
 import io
 import os
+import glob
 
 from setuptools import find_packages, setup
 
@@ -66,6 +67,9 @@ if not VERSION:
 else:
     about['__version__'] = VERSION
 
+# Get executable scripts
+scripts = glob.glob(os.path.join(here, 'bin', '*'))
+
 # Where the magic happens:
 setup(
     name=NAME,
@@ -83,6 +87,7 @@ setup(
     # entry_points={
     #     'console_scripts': ['mycli=mymodule:cli'],
     # },
+    scripts=scripts,
     install_requires=REQUIRED,
     extras_require=EXTRAS,
     include_package_data=True,
