@@ -86,7 +86,7 @@ class SourceHistory(Reader):
 
         if (len(self._processed) > 0): # assert that all fields have same number of heights
             assert (self.N == len(self.hLevelsCell)), \
-                    'Error: Various source fields do not have the same number of heights'
+                    'Error: Various source fields do not have the same number of heights, set varList to read separately'
         else: # first field: set number of heights in self.N
             self.N = len(self.hLevelsCell)
         self.hLevelsCell = np.array(self.hLevelsCell)
