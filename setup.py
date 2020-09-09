@@ -35,10 +35,10 @@ VERSION = '0.1.0'
 # What packages are required for this module to be executed?
 REQUIRED = [
     'matplotlib>=3',
-    'numpy==1.18.1',
-    'scipy==1.4.1',
-    'pandas==1.0.1',
-    'xarray==0.15.0',
+    'numpy>=1.18.1',
+    'scipy>=1.4.1',
+    'pandas>=1.0.1',
+    'xarray>=0.15.0',
 ]
 
 EXTRAS = {}
