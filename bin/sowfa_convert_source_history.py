@@ -50,7 +50,7 @@ with open(sourceUpath,'w') as f:
     f.write('sourceHeightsMomentum\n')
     f.write('(\n')
     np.savetxt(f, sourceU.hLevelsCell, fmt=fmt)
-    f.write(')\n\n')
+    f.write(');\n\n')
 
     fmt = '    (' + ' '.join((sourceU.N+1)*['%g']) + ')'
     for i,comp in enumerate(['X','Y','Z']):
@@ -58,7 +58,7 @@ with open(sourceUpath,'w') as f:
         f.write(f'sourceTableMomentum{comp}\n')
         f.write('(\n')
         np.savetxt(f, srcdata, fmt=fmt)
-        f.write(')\n\n')
+        f.write(');\n\n')
 print('Wrote',sourceUpath)
 
 sourceTpath = os.path.join(outpath,'givenSourceT')
@@ -67,13 +67,13 @@ with open(sourceTpath,'w') as f:
     f.write('sourceHeightsTemperature\n')
     f.write('(\n')
     np.savetxt(f, sourceT.hLevelsCell, fmt=fmt)
-    f.write(')\n\n')
+    f.write(');\n\n')
 
     fmt = '    (' + ' '.join((sourceT.N+1)*['%g']) + ')'
     srcdata = np.hstack((sourceT.t[:,np.newaxis], sourceT.Temperature))
     f.write(f'sourceTableTemperature\n')
     f.write('(\n')
     np.savetxt(f, srcdata, fmt=fmt)
-    f.write(')\n\n')
+    f.write(');\n\n')
 print('Wrote',sourceTpath)
 
