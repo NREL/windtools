@@ -73,8 +73,11 @@ class LogFile(object):
                     #     south - flux: -48330.2959591 / area: 500000
                     #     total - flux: 3.52156348526e-09  / area: 4000000
                     bndryFluxTot.append(float(line.split()[3]))
+
+        # create data dict
         data = {}
         if len(dt) > 0:
+            # adjustTimeStep is on
             data['deltaT'] = dt
         data['CoMean'] = CoMean
         data['CoMax'] = CoMax
@@ -82,6 +85,16 @@ class LogFile(object):
         data['continuityErrorMax'] = contErrMax
         data['continuityErrorWeightedMean'] = contErrMean
         data['boundaryFluxTotal'] = bndryFluxTot
+
+        # trim data if needed
+        datalengths = [len(arr) for _,arr in data.items()]
+        if not all([N == datalengths[0] for N in datalengths]):
+            Nsteps = min(datalengths)
+            times = times[:Nsteps]
+            for name,arr in data.items():
+                data[name] = arr[:Nsteps]
+            print('Note: Truncated number of steps to',Nsteps)
+
         self.df = pd.DataFrame(data, index=pd.Index(times, name='time'))
 
 #------------------------------------------------------------------------------
