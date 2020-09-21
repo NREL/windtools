@@ -73,17 +73,16 @@ class LogFile(object):
                     #     south - flux: -48330.2959591 / area: 500000
                     #     total - flux: 3.52156348526e-09  / area: 4000000
                     bndryFluxTot.append(float(line.split()[3]))
-        self.df = pd.DataFrame(
-                data={
-                    'deltaT': dt,
-                    'CoMean': CoMean,
-                    'CoMax': CoMax,
-                    'continuityErrorMin': contErrMin,
-                    'continuityErrorMax': contErrMax,
-                    'continuityErrorWeightedMean': contErrMean,
-                    'boundaryFluxTotal': bndryFluxTot,
-                },
-                index=pd.Index(times, name='time'))
+        data = {}
+        if len(dt) > 0:
+            data['deltaT'] = dt
+        data['CoMean'] = CoMean
+        data['CoMax'] = CoMax
+        data['continuityErrorMin'] = contErrMin
+        data['continuityErrorMax'] = contErrMax
+        data['continuityErrorWeightedMean'] = contErrMean
+        data['boundaryFluxTotal'] = bndryFluxTot
+        self.df = pd.DataFrame(data, index=pd.Index(times, name='time'))
 
 #------------------------------------------------------------------------------
 if __name__ == '__main__':
