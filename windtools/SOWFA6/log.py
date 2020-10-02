@@ -31,6 +31,7 @@ class LogFile(object):
         contErrMax = []
         contErrMean = []
         bndryFluxTot = []
+        turbine_thrust = []
         with open(fpath,'r') as f:
             for line in f:
                 line = line.strip()
@@ -73,6 +74,19 @@ class LogFile(object):
                     #     south - flux: -48330.2959591 / area: 500000
                     #     total - flux: 3.52156348526e-09  / area: 4000000
                     bndryFluxTot.append(float(line.split()[3]))
+                elif line.startswith('Turbine'):
+                    # Turbine 0	Rotor Torque from Body Force = 80826.6608129	Rotor Torque from Actuator = 80826.6608129	Ratio = 1
+                    # Turbine 0	Rotor Axial Force from Body Force = 31188.1287252	Rotor Axial Force from Actuator = 31188.1287237	Ratio = 1.00000000005
+                    # Turbine 0	Nacelle Axial Force from BodyForce = 154.910049102	Nacelle Axial Force from Actuator = 153.712783319	Ratio = 1.00778897993
+                    line = line.split()
+                    iturb = int(line[1])
+                    if ' '.join(line[2:5]) == 'Rotor Axial Force':
+                        thrust = float(line[9])
+                        try:
+                            turbine_thrust[iturb].append(thrust)
+                        except IndexError:
+                            turbine_thrust.append([thrust])
+                            assert (len(turbine_thrust) == iturb+1)
 
         # create data dict
         data = {}
@@ -85,6 +99,8 @@ class LogFile(object):
         data['continuityErrorMax'] = contErrMax
         data['continuityErrorWeightedMean'] = contErrMean
         data['boundaryFluxTotal'] = bndryFluxTot
+        for iturb,thrust in enumerate(turbine_thrust):
+            data[f'thrust{iturb:d}'] = thrust
 
         # trim data if needed
         datalengths = [len(arr) for _,arr in data.items()]
