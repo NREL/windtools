@@ -12,6 +12,16 @@
 import os
 import struct
 
+channelnames = {
+    'GenPwr_[kW]': 'Generator Power [kW]',
+    'GenTq_[kN-m]': 'Generator Torque [kN-m]',
+    'RotSpeed_[rpm]': 'Rotor Speed [RPM]',
+    'BldPitch1_[deg]': 'Blade 1 Pitch [deg]',
+    'BldPitch2_[deg]': 'Blade 2 Pitch [deg]',
+    'BldPitch3_[deg]': 'Blade 3 Pitch [deg]',
+    'YawPos_[deg]': 'Nacelle Yaw Position [deg]',
+}
+
 InflowWind_template = """------- InflowWind v3.01.* INPUT FILE -------------------------------------------------------------------------
 Inflow description here.
 ---------------------------------------------------------------------------------------------------------------
