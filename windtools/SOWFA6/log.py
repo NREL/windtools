@@ -97,7 +97,3 @@ class LogFile(object):
 
         self.df = pd.DataFrame(data, index=pd.Index(times, name='time'))
 
-#------------------------------------------------------------------------------
-if __name__ == '__main__':
-    df = pd.concat([LogFile(fpath).df for fpath in sys.argv[1:]])
-    df.to_csv('log.csv')
