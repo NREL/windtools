@@ -116,7 +116,7 @@ class TurbSim(InflowPlane):
             # read normalized data
             #
             # note: need to specify Fortran-order to properly read data using np.nditer
-            t0 = time.clock()
+            t0 = time.process_time()
             if self.verbose: print('Reading normalized grid data')
 
             self.U = np.zeros((3,self.NY,self.NZ,self.N),order='F',dtype=self.realtype)
@@ -139,7 +139,7 @@ class TurbSim(InflowPlane):
                     val[...] = f.read_int2()
 
             if self.verbose:
-                print('  Read velocitiy fields in',time.clock()-t0,'s')
+                print('  Read velocitiy fields in',time.process_time()-t0,'s')
                             
             #
             # calculate dimensional velocity

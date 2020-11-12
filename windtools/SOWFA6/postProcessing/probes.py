@@ -30,7 +30,7 @@ class Probe(Reader):
 
     Sample usage:
 
-        from SOWFA6.postProcessing.probes import Probe
+        from windtools.SOWFA6.postProcessing.probes import Probe
 
         # read all probes
         probe = Probe('postProcessing/probe1/')
