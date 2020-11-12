@@ -462,7 +462,7 @@ class InflowPlane(object):
             os.makedirs(outputdir)
 
         for i in range(0,self.N,step):
-            fname = outputdir + os.sep + prefix + '_' + str(i) + '.vtk'
+            fname = os.path.join(outputdir, f'{prefix:s}_{i:06d}.vtk')
             self.writeVTK(fname,itime=i,scaled=scaled,stdout=stdout)
         if stdout=='overwrite': sys.stdout.write('\n')
 
