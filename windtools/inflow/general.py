@@ -438,14 +438,16 @@ class InflowPlane(object):
                 W[0,:,iz] += self.W_inlet[:,iz]
 
         # write out VTK
-        vtk_write_structured_points( open(fname,'wb'), #binary mode
-            1, self.NY, self.NZ,
-            [ U,V,W, up,vp,wp ],
-            datatype=['vector','vector'],
+        vtk_write_structured_points(
+            open(fname,'wb'), #binary mode
+            {
+                "U": np.stack((U,V,W)),
+                "u'": np.stack((up,vp,wp)),
+            },
             dx=1.0, dy=self.dy, dz=self.dz,
-            dataname=['U','u\''],
             origin=[0.,self.y[0],self.z[0]],
-            indexorder='ijk')
+            indexorder='ijk',
+        )
 
 
     def writeVTKSeries(self,
