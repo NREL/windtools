@@ -13,13 +13,17 @@ import sys
 import pandas as pd
 from windtools.SOWFA6.log import LogFile
 
-outfile = 'log.csv'
-
 if len(sys.argv) <= 1:
     sys.exit('Specify log file(s)')
 
-print('Scraping log files:',sys.argv[1:])
-df = pd.concat([LogFile(fpath).df for fpath in sys.argv[1:]])
+logfiles = sys.argv[1:]
+if len(logfiles) > 1:
+    outfile = 'combined_log.csv'
+else:
+    outfile = logfiles[0] + '.csv'
+
+print('Scraping log files:',logfiles)
+df = pd.concat([LogFile(fpath).df for fpath in logfiles])
 
 # drop duplicate rows (for restarts)
 df.drop_duplicates(keep='last',inplace=True)
