@@ -33,7 +33,7 @@ fieldlabels_default_units = {
     'u': r'u [m/s]', 'Ux': r'u [m/s]',
     'v': r'v [m/s]', 'Uy': r'v [m/s]',
     'w': r'Vertical wind speed [m/s]', 'Uz': r'Vertical wind speed [m/s]',
-    'theta': r'$\theta$ [K]',
+    'theta': r'$\theta$ [K]', 'T': r'$\theta$ [K]',
     'thetav': r'$\theta_v$ [K]',
     'uu': r'$\langle u^\prime u^\prime \rangle \;[\mathrm{m^2/s^2}]$',  'UUxx': r'$\langle u^\prime u^\prime \rangle \;[\mathrm{m^2/s^2}]$',
     'vv': r'$\langle v^\prime v^\prime \rangle \;[\mathrm{m^2/s^2}]$',  'UUyy': r'$\langle v^\prime v^\prime \rangle \;[\mathrm{m^2/s^2}]$',
