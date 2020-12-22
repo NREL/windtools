@@ -198,8 +198,8 @@ Notes:
         # Example: get 'vmasts_50mGrid_h30_T.xy' and return param=30, var='T'
         # Remove the prefix from the full field name
         f = field.replace(self.fprefix,'')
-        # Substitude the dot in the extension to underscore and split array
-        f = f.replace('.','_').split('_')
+        # Substitude the first underscore with a dot and split array
+        f = f.replace('_','.',1).split('.')
         for i in set(f).intersection(self._allVars):
             var = i
         param = int(f[-3])
