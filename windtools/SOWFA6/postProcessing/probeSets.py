@@ -17,6 +17,7 @@ written by Regis Thedin (regis.thedin@nrel.gov)
 """
 from __future__ import print_function
 import os
+import pandas as pd
 import numpy as np
 from .reader import Reader
 
@@ -38,57 +39,56 @@ class ProbeSets(Reader):
     split into prefix, suffix, variable sweep, and variables to save. It is also possible to specify a
     sub-domain in which data is needed. It is assumed that all sets have the same points.
 
-
-Sample usage:
-    
-    from windtools.SOWFA6.postProcessing.probeSets import ProbeSets
-    
-    # read all times, all variables
-    probeData = ProbeSet('path/to/case/postProcessing/probeName')
-    
-    # read specified fields
-    probeData = ProbeSet('path/to/case/PostProcessing/probeName', varList['U','T'])
-    
-    # read specified sub-domain
-    probeData = ProbeSet('path/to/case/postProcessing/probeName', xi=-2500, xf=2500, yi=-2500, yf=2500)
-    
-    # read all and account for added perturbation on the sampling points
-    probeData = ProbeSet('path/to/case/postProcessing/probeName', posPert=-0.01)
-    
-    # read specified time dirs
-    probeData = ProbeSet('path/to/case/postProcessing/probeName', tstart=30000, tend=30100)
-    
-    # read certain files following complex naming convention
-    # e.g. if the probes are specified as
-    ```
-    probeName
-    {
-        type sets;
-        name pointcloud;
-        // other settings...
-        fields ( U T );
-        sets
-        (
-            vmasts_h10
-            {
-                type points;
+    Sample usage:
+        
+        from windtools.SOWFA6.postProcessing.probeSets import ProbeSets
+        
+        # read all times, all variables
+        probeData = ProbeSet('path/to/case/postProcessing/probeName')
+        
+        # read specified fields
+        probeData = ProbeSet('path/to/case/PostProcessing/probeName', varList['U','T'])
+        
+        # read specified sub-domain
+        probeData = ProbeSet('path/to/case/postProcessing/probeName', xi=-2500, xf=2500, yi=-2500, yf=2500)
+        
+        # read all and account for added perturbation on the sampling points
+        probeData = ProbeSet('path/to/case/postProcessing/probeName', posPert=-0.01)
+        
+        # read specified time dirs
+        probeData = ProbeSet('path/to/case/postProcessing/probeName', tstart=30000, tend=30100)
+        
+        # read certain files following complex naming convention
+        # e.g. if the probes are specified as
+        ```
+        probeName
+        {
+            type sets;
+            name pointcloud;
+            // other settings...
+            fields ( U T );
+            sets
+            (
+                vmasts_h10
+                {
+                    type points;
+                    // ...
+                }
+                vmasts_h20
+                {
+                    // ...
+                }
                 // ...
-            }
-            vmasts_h20
-            {
-                // ...
-            }
-            // ...
-        )
-    }
-    ```
-    # and the user wishes to read to vmasts_h{10,50}_{T,U}.xy, then:
-    probeData = ProbeSet('path/to/case/postProcessing/probeName',
-                fprefix='vmasts_h', fparam=['10','50'], varList=['T','U'], fsuffix='.xy')
-                
-Notes:
-    - If `varList` is not specified, then all the probes are read, ignoring prefix, sufix, and parameters
-    - Pandas/dataframe is used internally even though the final object is of `Reader` type.
+            )
+        }
+        ```
+        # and the user wishes to read to vmasts_h{10,50}_{T,U}.xy, then:
+        probeData = ProbeSet('path/to/case/postProcessing/probeName',
+                    fprefix='vmasts_h', fparam=['10','50'], varList=['T','U'], fsuffix='.xy')
+                    
+    Notes:
+        - If `varList` is not specified, then all the probes are read, ignoring prefix, sufix, and parameters
+        - Pandas/dataframe is used internally even though the final object is of `Reader` type.
 
     """
     def __init__(self, dpath=None, tstart=None, tend=None, varList='all', posPert=0.0, **kwargs):   
@@ -258,7 +258,6 @@ Notes:
     #============================================================================
 
     def to_pandas(self,itime=None,fields=None,dtype=None):
-        import pandas as pd
         #output all vars
         if fields is None:
             fields = self._processed
