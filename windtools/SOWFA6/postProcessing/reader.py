@@ -112,7 +112,12 @@ class Reader(object):
             # combine into a single array and trim end of time series
             # (because simulations that are still running can have different
             # array lengths)
-            newdata = np.concatenate(arrays)[:self.imax,:]
+            try:
+                newdata = np.concatenate(arrays)[:self.imax,:]
+            except ValueError:
+                print('Could not concatenate the following time-height arrays:')
+                for tdir,arr in zip(tdirList, arrays):
+                    print(' ', tdir, arr.shape)
 
             # get rid of overlapped data for restarts
             if trimOverlap:
