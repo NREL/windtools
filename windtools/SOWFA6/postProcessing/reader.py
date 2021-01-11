@@ -63,11 +63,25 @@ class Reader(object):
             if not os.path.isdir(dpath+os.sep+dirname): continue
             try:
                 startTime = float(dirname)
-                self.simTimeDirs.append( dpath+os.sep+dirname )
-                self.simStartTimes.append( startTime )
             except ValueError:
                 # dirname is not a number
                 pass
+            else:
+                self.simTimeDirs.append( dpath+os.sep+dirname )
+                self.simStartTimes.append( startTime )
+
+        if len(self.simTimeDirs) == 0:
+            # no time directories found; perhaps a single time directory
+            # was directly specified
+            dirname = os.path.split(dpath)[-1]
+            try:
+                startTime = float(dirname)
+            except ValueError:
+                # dirname is not a number
+                pass
+            else:
+                self.simTimeDirs.append( dpath )
+                self.simStartTimes.append( startTime )
 
         # sort results
         self.simTimeDirs = [ x[1] for x in sorted(zip(self.simStartTimes,self.simTimeDirs)) ]
