@@ -13,18 +13,21 @@ import os
 import pandas as pd
 
 
-def read_mesh(fpath,headerlength=8):
+def read_mesh(fpath,headerlength=8,chunksize=None):
     """Read Ensight mesh file (ascii) into a dataframe"""
     with open(fpath,'r') as f:
         for _ in range(headerlength):
             f.readline()
         N = int(f.readline())
-        mesh = pd.read_csv(f,header=None,nrows=3*N).values
+        if chunksize is None:
+            mesh = pd.read_csv(f,header=None,nrows=3*N).values
+        else:
+            mesh = pd.concat(pd.read_csv(f,header=None,nrows=3*N,chunksize=chunksize)).values
     df = pd.DataFrame(data=mesh.reshape((N,3),order='F'), columns=['x','y','z'])
     return df
 
 
-def read_vector(fpath,mesh,t=0.0,headerlength=4):
+def read_vector(fpath,mesh,t=0.0,headerlength=4,chunksize=None):
     """Read Ensight data array (ascii) into a dataframe with combined mesh
     information corresponding to the specified time; mesh should be read in by
     the read_mesh() function
@@ -33,7 +36,10 @@ def read_vector(fpath,mesh,t=0.0,headerlength=4):
     with open(fpath,'r') as f:
         for _ in range(headerlength):
             f.readline()
-        vals = pd.read_csv(f,header=None,nrows=3*Npts).values
+        if chunksize is None:
+            vals = pd.read_csv(f,header=None,nrows=3*Npts).values
+        else:
+            vals = pd.concat(pd.read_csv(f,header=None,nrows=3*Npts,chunksize=chunksize)).values
     df = mesh.copy()
     df['t'] = t
     uvw = pd.DataFrame(data=vals.reshape((Npts,3),order='F'), columns=['u','v','w'])
