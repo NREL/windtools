@@ -31,8 +31,8 @@ class ProbeSets(Reader):
     
     The `set`-type of probe is used when large number of data points need to be saved.
     Therefore, this class differs from `Probe` and is tailored for the specification of 
-    many sets and looping through the files with easy. The inputs of this class were created
-    to make it easy to accomodate very large datasets, or only read a sub-set of the saved data.
+    many sets and looping through the files with ease. The inputs of this class were created
+    to make it easy to accomodate very large datasets, or only read a subset of the saved data.
     
     If the need of using `set` arises, chances are the naming of the probes will be complex and likely
     inlcude a sweep of a variable in its name. Due to that, the user can specify the name of the probes
@@ -91,14 +91,17 @@ class ProbeSets(Reader):
         - Pandas/dataframe is used internally even though the final object is of `Reader` type.
 
     """
-    def __init__(self, dpath=None, tstart=None, tend=None, varList='all', posPert=0.0, **kwargs):   
-        self.xi = kwargs.pop('xi') if 'xi' in kwargs.keys() else None
-        self.xf = kwargs.pop('xf') if 'xf' in kwargs.keys() else None
-        self.yi = kwargs.pop('yi') if 'yi' in kwargs.keys() else None
-        self.yf = kwargs.pop('yf') if 'yf' in kwargs.keys() else None          
-        self.fprefix = kwargs.pop('fprefix') if 'fprefix' in kwargs.keys() else None
-        self.fparam  = kwargs.pop('fparam')  if 'fparam'  in kwargs.keys() else None
-        self.fsuffix = kwargs.pop('fsuffix') if 'fsuffix' in kwargs.keys() else None
+    def __init__(self, dpath=None, tstart=None, tend=None, varList='all', posPert=0.0, 
+                 xi=None, xf=None, yi=None, yf=None,
+                 fprefix=None, fparam=None, fsuffix=None,
+                 **kwargs):
+        self.xi = xi
+        self.xf = xf
+        self.yi = yi
+        self.yf = yf
+        self.fprefix = fprefix
+        self.fparam  = fparam
+        self.fsuffix = fsuffix
         self.posPert = posPert
         self.tstart = tstart
         self.tend = tend
