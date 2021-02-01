@@ -87,8 +87,6 @@ class Reader(object):
         self.simTimeDirs = [ x[1] for x in sorted(zip(self.simStartTimes,self.simTimeDirs)) ]
         self.simStartTimes.sort()
 
-        print('Simulation (re)start times:',self.simStartTimes)
-
         # process all output dirs
         if len(self.simTimeDirs) > 0:
             self._processdirs( self.simTimeDirs, **kwargs )
@@ -108,6 +106,8 @@ class Reader(object):
         is updated, e.g.:
             ${timeDir}/U is appended to the array self.U
         """
+        print('Simulation (re)start times:',self.simStartTimes)
+
         if isinstance( varList, (str,) ):
             if varList.lower()=='all':
                 # special case: read all vars
