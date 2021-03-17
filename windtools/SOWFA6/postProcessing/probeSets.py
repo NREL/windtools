@@ -147,7 +147,10 @@ class ProbeSets(Reader):
                 for prefix in fprefix:
                     for param in fparam:
                         for suffix in fsuffix:
-                            fileList.append( prefix + param + '_' + var + suffix )
+                            try:
+                                fileList.append( prefix + param + '_' + var + suffix )
+                            except TypeError:
+                                raise ValueError('Specify fprefix, fparam, varList, and fsuffix (check spelling)')
             outputs = fileList
 
         # Get list of times and trim the data
