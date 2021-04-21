@@ -20,6 +20,22 @@ import os
 import numpy as np
 from .reader import Reader
 
+def subset_probe(p,indices):
+    """Return a copy of a Probe object with a subset of locations selected"""
+    from copy import deepcopy
+    if isinstance(indices, int):
+        indices = [indices]
+    p = deepcopy(p)
+    p.pos = p.pos[indices,:]
+    p.hLevelsCell = p.hLevelsCell[indices]
+    p.N = len(indices)
+    print('Selected indices:')
+    print(p.pos)
+    for field in p._processed:
+        F = getattr(p,field)
+        F = F[indices,:]
+    return p
+
 class Probe(Reader):
     """Stores a time array (t), and field arrays as attributes. The
     fields have shape:
