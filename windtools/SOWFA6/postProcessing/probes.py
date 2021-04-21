@@ -27,7 +27,6 @@ def subset_probe(p,indices):
         indices = [indices]
     p = deepcopy(p)
     p.pos = p.pos[indices,:]
-    p.hLevelsCell = p.hLevelsCell[indices]
     p.N = len(indices)
     print('Selected indices:')
     print(p.pos)
