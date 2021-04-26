@@ -30,8 +30,8 @@ from scipy.signal import welch
 fieldlabels_default_units = {
     'wspd': r'Wind speed [m/s]',
     'wdir': r'Wind direction [$^\circ$]',
-    'u': r'u [m/s]', 'Ux': r'u [m/s]',
-    'v': r'v [m/s]', 'Uy': r'v [m/s]',
+    'u': r'u [m/s]', 'Ux': r'$u$ [m/s]',
+    'v': r'v [m/s]', 'Uy': r'$v$ [m/s]',
     'w': r'Vertical wind speed [m/s]', 'Uz': r'Vertical wind speed [m/s]',
     'theta': r'$\theta$ [K]', 'T': r'$\theta$ [K]',
     'thetav': r'$\theta_v$ [K]',
@@ -48,8 +48,8 @@ fieldlabels_default_units = {
 fieldlabels_superscript_units = {
     'wspd': r'Wind speed [m s$^{-1}$]',
     'wdir': r'Wind direction [$^\circ$]',
-    'u': r'u [m s$^{-1}$]', 'Ux': r'u [m s$^{-1}$]',
-    'v': r'v [m s$^{-1}$]', 'Uy': r'v [m s$^{-1}$]',
+    'u': r'u [m s$^{-1}$]', 'Ux': r'$u$ [m s$^{-1}$]',
+    'v': r'v [m s$^{-1}$]', 'Uy': r'$v$ [m s$^{-1}$]',
     'w': r'Vertical wind speed [m s$^{-1}$]',    'Uz': r'Vertical wind speed [m s$^{-1}$]',
     'theta': r'$\theta$ [K]', 'T': r'$\theta$ [K]',
     'thetav': r'$\theta_v$ [K]',
@@ -74,12 +74,12 @@ spectrumlabels_default_units = {
     'wspd': r'$E_{UU}\;[\mathrm{m^2/s}]$',
 }
 spectrumlabels_superscript_units = {
-    'u': r'$E_{uu}\;[\mathrm{m^2 s^{-1}}]$',
-    'v': r'$E_{vv}\;[\mathrm{m^2 s^{-1}}]$',
-    'w': r'$E_{ww}\;[\mathrm{m^2 s^{-1}}]$',
-    'theta': r'$E_{\theta\theta}\;[\mathrm{K^2 s}]$',
-    'thetav': r'$E_{\theta\theta}\;[\mathrm{K^2 s}]$',
-    'wspd': r'$E_{UU}\;[\mathrm{m^2 s^{-1}}]$',
+    'u': r'$E_{uu}\;[\mathrm{m^2\;s^{-1}}]$',
+    'v': r'$E_{vv}\;[\mathrm{m^2\;s^{-1}}]$',
+    'w': r'$E_{ww}\;[\mathrm{m^2\;s^{-1}}]$',
+    'theta': r'$E_{\theta\theta}\;[\mathrm{K^2\;s}]$',
+    'thetav': r'$E_{\theta\theta}\;[\mathrm{K^2\;s}]$',
+    'wspd': r'$E_{UU}\;[\mathrm{m^2\;s^{-1}}]$',
 }
 
 # Default settings
@@ -151,8 +151,10 @@ def plot_timeheight(datasets,
         Custom field labels. If only one field is plotted, fieldlabels
         can be a string. Otherwise it should be a dictionary with
         entries <fieldname>: fieldlabel
-    labelsubplots : bool
-        Label subplots as (a), (b), (c), ...
+    labelsubplots : bool, list or tuple
+        Label subplots as (a), (b), (c), ... If a list or tuple is given
+        their values should be the horizontal and vertical position 
+        relative to each subaxis.
     showcolorbars : bool
         Show colorbar per subplot
     fieldorder : 'C' or 'F'
@@ -328,9 +330,13 @@ def plot_timeheight(datasets,
         _align_labels(fig,[cb.ax for cb in cbars],nrows,ncols)
     
     # Number sub figures as a, b, c, ...
-    if labelsubplots:
+    if labelsubplots is not False:
+        try:
+            hoffset, voffset = labelsubplots
+        except (TypeError, ValueError):
+            hoffset, voffset = -0.14, 1.0
         for i,axi in enumerate(axv):
-            axi.text(-0.14,1.0,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
+            axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
 
     # Return cbar instead of array if ntotal==1
     if len(cbars)==1:
@@ -345,6 +351,7 @@ def plot_timeheight(datasets,
 def plot_timehistory_at_height(datasets,
                                fields=None,
                                heights=None,
+                               extrapolate=True,
                                fig=None,ax=None,
                                fieldlimits=None,
                                timelimits=None,
@@ -385,6 +392,9 @@ def plot_timehistory_at_height(datasets,
         value. 'all' means the time history for all heights in the
         datasets will be plotted (in this case all datasets should
         have the same heights)
+    extrapolate : bool
+        If false, then output height(s) outside the data range will
+        not be plotted; default is true for backwards compatibility
     fig : figure handle
         Custom figure handle. Should be specified together with ax
     ax : axes handle, or list or numpy ndarray with axes handles
@@ -408,8 +418,10 @@ def plot_timehistory_at_height(datasets,
         If True, stack datasets together, otherwise stack by heights. If
         None, stack_by_datasets will be set based on the number of heights
         and datasets. 
-    labelsubplots : bool
-        Label subplots as (a), (b), (c), ...
+    labelsubplots : bool, list or tuple
+        Label subplots as (a), (b), (c), ... If a list or tuple is given
+        their values should be the horizontal and vertical position 
+        relative to each subaxis.
     showlegend : bool (or None)
         Label different plots and show legend. If None, showlegend is set
         to True if legend will have more than one entry, otherwise it is
@@ -516,6 +528,7 @@ def plot_timehistory_at_height(datasets,
         if (not heightvalues is None) and (not all([h in heightvalues for h in args.heights])):
             df_pivot = _get_pivot_table(df,'height',available_fields)
             pivoted = True
+            fill_value = 'extrapolate' if extrapolate else np.nan
             if debug: print('Pivoting '+dfname)
         else:
             pivoted = False
@@ -530,6 +543,16 @@ def plot_timehistory_at_height(datasets,
                 continue
 
             for k, height in enumerate(args.heights):
+                # Check if height is outside of data range
+                if (heightvalues is not None) and \
+                        ((height > np.max(heightvalues)) or (height < np.min(heightvalues))):
+                    if extrapolate:
+                        if debug:
+                            print('Extrapolating field "'+field+'" at z='+str(height)+' in dataset '+dfname)
+                    else:
+                        print('Warning: field "'+field+'" not available at z='+str(height)+' in dataset '+dfname)
+                        continue
+                
                 # Store plotting options in dictionary
                 # Set default linestyle to '-' and no markers
                 plotting_properties = {
@@ -573,7 +596,7 @@ def plot_timehistory_at_height(datasets,
 
                 # Extract data from dataframe
                 if pivoted:
-                    signal = interp1d(heightvalues,_get_pivoted_field(df_pivot,field).values,axis=-1,fill_value="extrapolate")(height)
+                    signal = interp1d(heightvalues,_get_pivoted_field(df_pivot,field).values,axis=-1,fill_value=fill_value)(height)
                 else:
                     slice_z = _get_slice(df,height,'height')
                     signal  = _get_field(slice_z,field).values
@@ -601,7 +624,7 @@ def plot_timehistory_at_height(datasets,
    
     # Set axis grid
     for axi in axv:
-        axi.xaxis.grid(True,which='minor')
+        axi.xaxis.grid(True,which='both')
         axi.yaxis.grid(True)
     
     # Format time axis
@@ -617,9 +640,13 @@ def plot_timehistory_at_height(datasets,
             axi.set_xlabel('time [s]')
 
     # Number sub figures as a, b, c, ...
-    if labelsubplots:
+    if labelsubplots is not False:
+        try:
+            hoffset, voffset = labelsubplots
+        except (TypeError, ValueError):
+            hoffset, voffset = -0.14, 1.0
         for i,axi in enumerate(axv):
-            axi.text(-0.14,1.0,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
+            axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
 
     # Add legend
     if showlegend:
@@ -649,6 +676,8 @@ def plot_profile(datasets,
                  fieldorder='C',
                  ncols=None,
                  subfigsize=(4,5),
+                 plot_local_time=False,
+                 local_time_offset=0,
                  datasetkwargs={},
                  **kwargs
                 ):
@@ -703,8 +732,10 @@ def plot_profile(datasets,
         If True, stack datasets together, otherwise stack by times. If
         None, stack_by_datasets will be set based on the number of times
         and datasets. 
-    labelsubplots : bool
-        Label subplots as (a), (b), (c), ...
+    labelsubplots : bool, list or tuple
+        Label subplots as (a), (b), (c), ... If a list or tuple is given
+        their values should be the horizontal and vertical position 
+        relative to each subaxis.
     showlegend : bool (or None)
         Label different plots and show legend. If None, showlegend is set
         to True if legend will have more than one entry, otherwise it is
@@ -719,6 +750,12 @@ def plot_profile(datasets,
         number of axes.
     subfigsize : list or tuple
         Standard size of subfigures
+    plot_local_time : bool or str
+        Plot dual x axes with both UTC time and local time. If a str is
+        provided, then plot_local_time is assumed to be True and the str
+        is used as the datetime format.
+    local_time_offset : float
+        Local time offset from UTC
     datasetkwargs : dict
         Dataset-specific options that are passed on to the actual
         plotting function. These options overwrite general options
@@ -796,11 +833,17 @@ def plot_profile(datasets,
         assert(heightvalues is not None), 'profile plot needs a height axis'
         timevalues = _get_dim_values(df,'time')
 
+        # If plot local time, shift timevalues
+        timedelta_to_local = None
+        if plot_local_time is not False:
+            timedelta_to_local = pd.to_timedelta(local_time_offset,'h')
+            timevalues = timevalues + timedelta_to_local
+
         # Create list with available fields only
         available_fields = _get_available_fieldnames(df,args.fields)
 
         # Pivot all fields in a dataset at once
-        if not timevalues is None:
+        if timevalues is not None:
             df_pivot = _get_pivot_table(df,'height',available_fields)
 
         for j, field in enumerate(args.fields):
@@ -832,7 +875,13 @@ def plot_profile(datasets,
                         if isinstance(time, (int,float,np.number)):
                             tstr = '{:g} s'.format(time)
                         else:
-                            tstr = pd.to_datetime(time).strftime('%Y-%m-%d %H%M UTC')
+                            if plot_local_time is False:
+                                tstr = pd.to_datetime(time).strftime('%Y-%m-%d %H%M UTC')
+                            elif plot_local_time is True:
+                                tstr = pd.to_datetime(time).strftime('%Y-%m-%d %H:%M')
+                            else:
+                                assert isinstance(plot_local_time,str), 'Unexpected plot_local_time format'
+                                tstr = pd.to_datetime(time).strftime(plot_local_time)
                         axv[axi].set_title(tstr, fontsize=16)
 
                     # Set color
@@ -849,7 +898,13 @@ def plot_profile(datasets,
                         if isinstance(time, (int,float,np.number)):
                             plotting_properties['label'] = '{:g} s'.format(time)
                         else:
-                            plotting_properties['label'] = pd.to_datetime(time).strftime('%Y-%m-%d %H%M UTC')
+                            if plot_local_time is False:
+                                plotting_properties['label'] = pd.to_datetime(time).strftime('%Y-%m-%d %H%M UTC')
+                            elif plot_local_time is True:
+                                plotting_properties['label'] = pd.to_datetime(time).strftime('%Y-%m-%d %H:%M')
+                            else:
+                                assert isinstance(plot_local_time,str), 'Unexpected plot_local_time format'
+                                plotting_properties['label'] = pd.to_datetime(time).strftime(plot_local_time)
 
                     # Set title if multiple datasets are compared
                     if ndatasets>1:
@@ -867,7 +922,11 @@ def plot_profile(datasets,
                     # Dataset will not be pivoted
                     fieldvalues = _get_field(df,field).values
                 else:
-                    slice_t = _get_slice(df_pivot,time,'time')
+                    if plot_local_time is not False:
+                        # specified times are in local time, convert back to UTC
+                        slice_t = _get_slice(df_pivot,time-timedelta_to_local,'time')
+                    else:
+                        slice_t = _get_slice(df_pivot,time,'time')
                     fieldvalues = _get_pivoted_field(slice_t,field).values.squeeze()
 
                 # Gather label, color, general options and dataset-specific options
@@ -878,7 +937,10 @@ def plot_profile(datasets,
                     plotting_properties = {**plotting_properties,**kwargs}
 
                 # Plot data
-                axv[axi].plot(fieldvalues,heightvalues,**plotting_properties)
+                try:
+                    axv[axi].plot(fieldvalues,heightvalues,**plotting_properties)
+                except ValueError as e:
+                    print(e,'--', time, 'not found in index?')
 
                 # Set field label if known
                 try:
@@ -906,9 +968,13 @@ def plot_profile(datasets,
     _align_labels(fig,axv,nrows,ncols)
     
     # Number sub figures as a, b, c, ...
-    if labelsubplots:
+    if labelsubplots is not False:
+        try:
+            hoffset, voffset = labelsubplots
+        except (TypeError, ValueError):
+            hoffset, voffset = -0.14, -0.18
         for i,axi in enumerate(axv):
-            axi.text(-0.14,-0.18,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
+            axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
     
     # Add legend
     if showlegend:
@@ -975,8 +1041,10 @@ def plot_spectrum(datasets,
         Custom field labels. If only one field is plotted, fieldlabels
         can be a string. Otherwise it should be a dictionary with
         entries <fieldname>: fieldlabel
-    labelsubplots : bool
-        Label subplots as (a), (b), (c), ...
+    labelsubplots : bool, list or tuple
+        Label subplots as (a), (b), (c), ... If a list or tuple is given
+        their values should be the horizontal and vertical position 
+        relative to each subaxis.
     showlegend : bool (or None)
         Label different plots and show legend. If None, showlegend is set
         to True if legend will have more than one entry, otherwise it is
@@ -1094,7 +1162,7 @@ def plot_spectrum(datasets,
 
     # Set frequency label
     for c in range(ncols):
-        axv[ncols*(nrows-1)+c].set_xlabel('f [Hz]')
+        axv[ncols*(nrows-1)+c].set_xlabel('$f$ [Hz]')
 
     # Specify field label if specified 
     for r in range(nrows):
@@ -1111,9 +1179,13 @@ def plot_spectrum(datasets,
         axv[0].set_xlim(freqlimits)
 
     # Number sub figures as a, b, c, ...
-    if labelsubplots:
+    if labelsubplots is not False:
+        try:
+            hoffset, voffset = labelsubplots
+        except (TypeError, ValueError):
+            hoffset, voffset = -0.14, -0.18
         for i,axi in enumerate(axv):
-            axi.text(-0.14,-0.18,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
+            axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
 
     # Add legend
     if showlegend:
@@ -1748,12 +1820,13 @@ def _format_time_axis(fig,ax,
         tstr = 'UTC time'
         ax2 = None
 
-    # Make sure both major and minor axis labels are visible when they are at
-    # the same time
-    ax[-1].xaxis.remove_overlapping_locs = False
-
-    # Set time label
+    # Now, update all axes
     for axi in ax:
+        # Make sure both major and minor axis labels are visible when they are
+        # at the same time
+        axi.xaxis.remove_overlapping_locs = False
+
+        # Set time label
         axi.set_xlabel(tstr)
 
     return ax2
@@ -1832,5 +1905,250 @@ def reference_lines(x_range, y_start, slopes, line_type='log'):
             shift = y_start/y_range[0,ss]
             y_range[:,ss] = y_range[:,ss]*shift
     return(y_range)
+
+
+class TaylorDiagram(object):
+    """
+    Taylor diagram.
+
+    Plot model standard deviation and correlation to reference (data)
+    sample in a single-quadrant polar plot, with r=stddev and
+    theta=arccos(correlation).
+
+    Based on code from Yannick Copin <yannick.copin@laposte.net>
+    Downloaded from https://gist.github.com/ycopin/3342888 on 2020-06-19
+    """
+
+    def __init__(self, refstd,
+                 fig=None, rect=111, label='_', srange=(0, 1.5), extend=False,
+                 normalize=False,
+                 corrticks=[0, 0.2, 0.4, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 1],
+                 minorcorrticks=None,
+                 stdevticks=None,
+                 labelsize=None):
+        """
+        Set up Taylor diagram axes, i.e. single quadrant polar
+        plot, using `mpl_toolkits.axisartist.floating_axes`.
+
+        Usage
+        =====
+        refstd: np.ndarray
+            Reference standard deviation to be compared to
+        fig: plt.Figure, optional
+            Input figure or None to create a new figure
+        rect: 3-digit integer
+            Subplot position, described by: nrows, ncols, index
+        label: str, optional
+            Legend label for reference point
+        srange: tuple, optional
+            Stdev axis limits, in units of *refstd*
+        extend: bool, optional
+            Extend diagram to negative correlations
+        normalize: bool, optional
+            Normalize stdev axis by `refstd`
+        corrticks: list-like, optional
+            Specify ticks positions on azimuthal correlation axis
+        minorcorrticks: list-like, optional
+            Specify minor tick positions on azimuthal correlation axis
+        stdevticks: int or list-like, optional
+            Specify stdev axis grid locator based on MaxNLocator (with
+            integer input) or FixedLocator (with list-like input)
+        labelsize: int or str, optional
+            Font size (e.g., 16 or 'x-large') for all axes labels
+        """
+
+        from matplotlib.projections import PolarAxes
+        from mpl_toolkits.axisartist import floating_axes
+        from mpl_toolkits.axisartist import grid_finder
+
+        self.refstd = refstd            # Reference standard deviation
+        self.normalize = normalize
+
+        tr = PolarAxes.PolarTransform()
+
+        # Correlation labels
+        if minorcorrticks is None:
+            rlocs = np.array(corrticks)
+        else:
+            rlocs = np.array(sorted(list(corrticks) + list(minorcorrticks)))
+        if extend:
+            # Diagram extended to negative correlations
+            self.tmax = np.pi
+            rlocs = np.concatenate((-rlocs[:0:-1], rlocs))
+        else:
+            # Diagram limited to positive correlations
+            self.tmax = np.pi/2
+        if minorcorrticks is None:
+            rlocstrs = [str(rloc) for rloc in rlocs]
+        else:
+            rlocstrs = [str(rloc) if abs(rloc) in corrticks else ''
+                        for rloc in rlocs]
+        tlocs = np.arccos(rlocs)        # Conversion to polar angles
+        gl1 = grid_finder.FixedLocator(tlocs)    # Positions
+        tf1 = grid_finder.DictFormatter(dict(zip(tlocs, rlocstrs)))
+
+        # Stdev labels
+        if isinstance(stdevticks, int):
+            gl2 = grid_finder.MaxNLocator(stdevticks)
+        elif hasattr(stdevticks, '__iter__'):
+            gl2 = grid_finder.FixedLocator(stdevticks)
+        else:
+            gl2 = None
+
+        # Standard deviation axis extent (in units of reference stddev)
+        self.smin, self.smax = srange
+        if not normalize:
+            self.smin *= self.refstd
+            self.smax *= self.refstd
+
+        ghelper = floating_axes.GridHelperCurveLinear(
+            tr,
+            extremes=(0, self.tmax, self.smin, self.smax),
+            grid_locator1=gl1,
+            grid_locator2=gl2,
+            tick_formatter1=tf1,
+            #tick_formatter2=tf2
+            )
+
+        if fig is None:
+            fig = plt.figure()
+
+        ax = floating_axes.FloatingSubplot(fig, rect, grid_helper=ghelper)
+        fig.add_subplot(ax)
+
+        # Adjust axes
+        # - angle axis
+        ax.axis["top"].set_axis_direction("bottom")
+        ax.axis["top"].toggle(ticklabels=True, label=True)
+        ax.axis["top"].major_ticklabels.set_axis_direction("top")
+        ax.axis["top"].label.set_axis_direction("top")
+        ax.axis["top"].label.set_text("Correlation")
+
+        # - "x" axis
+        ax.axis["left"].set_axis_direction("bottom")
+        if normalize:
+            ax.axis["left"].label.set_text("Normalized standard deviation")
+        else:
+            ax.axis["left"].label.set_text("Standard deviation")
+
+        # - "y" axis
+        ax.axis["right"].set_axis_direction("top")    # "Y-axis"
+        ax.axis["right"].toggle(ticklabels=True)
+        ax.axis["right"].major_ticklabels.set_axis_direction(
+                "bottom" if extend else "left")
+
+        # Set label sizes
+        if labelsize is not None:
+            ax.axis["top"].label.set_fontsize(labelsize)
+            ax.axis["left"].label.set_fontsize(labelsize)
+            ax.axis["right"].label.set_fontsize(labelsize)
+            ax.axis["top"].major_ticklabels.set_fontsize(labelsize)
+            ax.axis["left"].major_ticklabels.set_fontsize(labelsize)
+            ax.axis["right"].major_ticklabels.set_fontsize(labelsize)
+
+        if self.smin:
+            # get rid of cluster of labels at origin
+            ax.axis["bottom"].toggle(ticklabels=False, label=False)
+        else:
+            ax.axis["bottom"].set_visible(False)          # Unused
+
+        self._ax = ax                   # Graphical axes
+        self.ax = ax.get_aux_axes(tr)   # Polar coordinates
+
+        # Add reference point and stddev contour
+        t = np.linspace(0, self.tmax)
+        r = np.ones_like(t)
+        if self.normalize:
+            l, = self.ax.plot([0], [1], 'k*', ls='', ms=10, label=label)
+        else:
+            l, = self.ax.plot([0], self.refstd, 'k*', ls='', ms=10, label=label)
+            r *= refstd
+        self.ax.plot(t, r, 'k--', label='_')
+
+        # Collect sample points for latter use (e.g. legend)
+        self.samplePoints = [l]
+
+    def set_ref(self, refstd):
+        """
+        Update the reference standard deviation value
+
+        Useful for cases in which datasets with different reference
+        values (e.g., originating from different reference heights)
+        are to be overlaid on the same diagram.
+        """
+        self.refstd = refstd
+
+    def add_sample(self, stddev, corrcoef, norm=None, *args, **kwargs):
+        """
+        Add sample (*stddev*, *corrcoeff*) to the Taylor
+        diagram. *args* and *kwargs* are directly propagated to the
+        `Figure.plot` command.
+
+        `norm` may be specified to override the default normalization
+        value if TaylorDiagram was initialized with normalize=True
+        """
+        if (corrcoef < 0) and (self.tmax == np.pi/2):
+            print('Note: ({:g},{:g}) not shown for R2 < 0, set extend=True'.format(stddev,corrcoef))
+            return None
+
+        if self.normalize:
+            if norm is None:
+                norm = self.refstd
+            elif norm is False:
+                norm = 1
+            stddev /= norm
+
+        l, = self.ax.plot(np.arccos(corrcoef), stddev,
+                          *args, **kwargs)  # (theta, radius)
+        self.samplePoints.append(l)
+
+        return l
+
+    def add_grid(self, *args, **kwargs):
+        """Add a grid."""
+
+        self._ax.grid(*args, **kwargs)
+
+    def add_contours(self, levels=5, scale=1.0, **kwargs):
+        """
+        Add constant centered RMS difference contours, defined by *levels*.
+        """
+
+        rs, ts = np.meshgrid(np.linspace(self.smin, self.smax),
+                             np.linspace(0, self.tmax))
+        # Compute centered RMS difference
+        if self.normalize:
+            # - normalized refstd == 1
+            # - rs values were previously normalized in __init__
+            # - premultiply with (scale==refstd) to get correct rms diff
+            rms = scale * np.sqrt(1 + rs**2 - 2*rs*np.cos(ts))
+        else:
+            rms = np.sqrt(self.refstd**2 + rs**2 - 2*self.refstd*rs*np.cos(ts))
+
+        contours = self.ax.contour(ts, rs, rms, levels, **kwargs)
+
+        return contours
+
+    def set_xlabel(self, label, fontsize=None):
+        """
+        Set the label for the standard deviation axis
+        """
+        self._ax.axis["left"].label.set_text(label)
+        if fontsize is not None:
+            self._ax.axis["left"].label.set_fontsize(fontsize)
+
+    def set_alabel(self, label, fontsize=None):
+        """
+        Set the label for the azimuthal axis
+        """
+        self._ax.axis["top"].label.set_text(label)
+        if fontsize is not None:
+            self._ax.axis["top"].label.set_fontsize(fontsize)
+
+    def set_title(self, label, **kwargs):
+        """
+        Set the title for the axes
+        """
+        self._ax.set_title(label, **kwargs)
 
 
