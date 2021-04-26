@@ -30,8 +30,8 @@ from scipy.signal import welch
 fieldlabels_default_units = {
     'wspd': r'Wind speed [m/s]',
     'wdir': r'Wind direction [$^\circ$]',
-    'u': r'u [m/s]', 'Ux': r'u [m/s]',
-    'v': r'v [m/s]', 'Uy': r'v [m/s]',
+    'u': r'u [m/s]', 'Ux': r'$u$ [m/s]',
+    'v': r'v [m/s]', 'Uy': r'$v$ [m/s]',
     'w': r'Vertical wind speed [m/s]', 'Uz': r'Vertical wind speed [m/s]',
     'theta': r'$\theta$ [K]', 'T': r'$\theta$ [K]',
     'thetav': r'$\theta_v$ [K]',
@@ -48,8 +48,8 @@ fieldlabels_default_units = {
 fieldlabels_superscript_units = {
     'wspd': r'Wind speed [m s$^{-1}$]',
     'wdir': r'Wind direction [$^\circ$]',
-    'u': r'u [m s$^{-1}$]', 'Ux': r'u [m s$^{-1}$]',
-    'v': r'v [m s$^{-1}$]', 'Uy': r'v [m s$^{-1}$]',
+    'u': r'u [m s$^{-1}$]', 'Ux': r'$u$ [m s$^{-1}$]',
+    'v': r'v [m s$^{-1}$]', 'Uy': r'$v$ [m s$^{-1}$]',
     'w': r'Vertical wind speed [m s$^{-1}$]',    'Uz': r'Vertical wind speed [m s$^{-1}$]',
     'theta': r'$\theta$ [K]', 'T': r'$\theta$ [K]',
     'thetav': r'$\theta_v$ [K]',
@@ -74,12 +74,12 @@ spectrumlabels_default_units = {
     'wspd': r'$E_{UU}\;[\mathrm{m^2/s}]$',
 }
 spectrumlabels_superscript_units = {
-    'u': r'$E_{uu}\;[\mathrm{m^2 s^{-1}}]$',
-    'v': r'$E_{vv}\;[\mathrm{m^2 s^{-1}}]$',
-    'w': r'$E_{ww}\;[\mathrm{m^2 s^{-1}}]$',
-    'theta': r'$E_{\theta\theta}\;[\mathrm{K^2 s}]$',
-    'thetav': r'$E_{\theta\theta}\;[\mathrm{K^2 s}]$',
-    'wspd': r'$E_{UU}\;[\mathrm{m^2 s^{-1}}]$',
+    'u': r'$E_{uu}\;[\mathrm{m^2\;s^{-1}}]$',
+    'v': r'$E_{vv}\;[\mathrm{m^2\;s^{-1}}]$',
+    'w': r'$E_{ww}\;[\mathrm{m^2\;s^{-1}}]$',
+    'theta': r'$E_{\theta\theta}\;[\mathrm{K^2\;s}]$',
+    'thetav': r'$E_{\theta\theta}\;[\mathrm{K^2\;s}]$',
+    'wspd': r'$E_{UU}\;[\mathrm{m^2\;s^{-1}}]$',
 }
 
 # Default settings
