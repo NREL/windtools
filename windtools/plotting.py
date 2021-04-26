@@ -351,6 +351,7 @@ def plot_timeheight(datasets,
 def plot_timehistory_at_height(datasets,
                                fields=None,
                                heights=None,
+                               extrapolate=True,
                                fig=None,ax=None,
                                fieldlimits=None,
                                timelimits=None,
@@ -391,6 +392,9 @@ def plot_timehistory_at_height(datasets,
         value. 'all' means the time history for all heights in the
         datasets will be plotted (in this case all datasets should
         have the same heights)
+    extrapolate : bool
+        If false, then output height(s) outside the data range will
+        not be plotted; default is true for backwards compatibility
     fig : figure handle
         Custom figure handle. Should be specified together with ax
     ax : axes handle, or list or numpy ndarray with axes handles
@@ -524,6 +528,7 @@ def plot_timehistory_at_height(datasets,
         if (not heightvalues is None) and (not all([h in heightvalues for h in args.heights])):
             df_pivot = _get_pivot_table(df,'height',available_fields)
             pivoted = True
+            fill_value = 'extrapolate' if extrapolate else np.nan
             if debug: print('Pivoting '+dfname)
         else:
             pivoted = False
@@ -538,6 +543,16 @@ def plot_timehistory_at_height(datasets,
                 continue
 
             for k, height in enumerate(args.heights):
+                # Check if height is outside of data range
+                if (heightvalues is not None) and \
+                        ((height > np.max(heightvalues)) or (height < np.min(heightvalues))):
+                    if extrapolate:
+                        if debug:
+                            print('Extrapolating field "'+field+'" at z='+str(height)+' in dataset '+dfname)
+                    else:
+                        print('Warning: field "'+field+'" not available at z='+str(height)+' in dataset '+dfname)
+                        continue
+                
                 # Store plotting options in dictionary
                 # Set default linestyle to '-' and no markers
                 plotting_properties = {
@@ -581,7 +596,7 @@ def plot_timehistory_at_height(datasets,
 
                 # Extract data from dataframe
                 if pivoted:
-                    signal = interp1d(heightvalues,_get_pivoted_field(df_pivot,field).values,axis=-1,fill_value="extrapolate")(height)
+                    signal = interp1d(heightvalues,_get_pivoted_field(df_pivot,field).values,axis=-1,fill_value=fill_value)(height)
                 else:
                     slice_z = _get_slice(df,height,'height')
                     signal  = _get_field(slice_z,field).values
