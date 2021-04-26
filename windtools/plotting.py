@@ -661,6 +661,8 @@ def plot_profile(datasets,
                  fieldorder='C',
                  ncols=None,
                  subfigsize=(4,5),
+                 plot_local_time=False,
+                 local_time_offset=0,
                  datasetkwargs={},
                  **kwargs
                 ):
@@ -733,6 +735,12 @@ def plot_profile(datasets,
         number of axes.
     subfigsize : list or tuple
         Standard size of subfigures
+    plot_local_time : bool or str
+        Plot dual x axes with both UTC time and local time. If a str is
+        provided, then plot_local_time is assumed to be True and the str
+        is used as the datetime format.
+    local_time_offset : float
+        Local time offset from UTC
     datasetkwargs : dict
         Dataset-specific options that are passed on to the actual
         plotting function. These options overwrite general options
@@ -810,11 +818,17 @@ def plot_profile(datasets,
         assert(heightvalues is not None), 'profile plot needs a height axis'
         timevalues = _get_dim_values(df,'time')
 
+        # If plot local time, shift timevalues
+        timedelta_to_local = None
+        if plot_local_time is not False:
+            timedelta_to_local = pd.to_timedelta(local_time_offset,'h')
+            timevalues = timevalues + timedelta_to_local
+
         # Create list with available fields only
         available_fields = _get_available_fieldnames(df,args.fields)
 
         # Pivot all fields in a dataset at once
-        if not timevalues is None:
+        if timevalues is not None:
             df_pivot = _get_pivot_table(df,'height',available_fields)
 
         for j, field in enumerate(args.fields):
@@ -846,7 +860,13 @@ def plot_profile(datasets,
                         if isinstance(time, (int,float,np.number)):
                             tstr = '{:g} s'.format(time)
                         else:
-                            tstr = pd.to_datetime(time).strftime('%Y-%m-%d %H%M UTC')
+                            if plot_local_time is False:
+                                tstr = pd.to_datetime(time).strftime('%Y-%m-%d %H%M UTC')
+                            elif plot_local_time is True:
+                                tstr = pd.to_datetime(time).strftime('%Y-%m-%d %H:%M')
+                            else:
+                                assert isinstance(plot_local_time,str), 'Unexpected plot_local_time format'
+                                tstr = pd.to_datetime(time).strftime(plot_local_time)
                         axv[axi].set_title(tstr, fontsize=16)
 
                     # Set color
@@ -863,7 +883,13 @@ def plot_profile(datasets,
                         if isinstance(time, (int,float,np.number)):
                             plotting_properties['label'] = '{:g} s'.format(time)
                         else:
-                            plotting_properties['label'] = pd.to_datetime(time).strftime('%Y-%m-%d %H%M UTC')
+                            if plot_local_time is False:
+                                plotting_properties['label'] = pd.to_datetime(time).strftime('%Y-%m-%d %H%M UTC')
+                            elif plot_local_time is True:
+                                plotting_properties['label'] = pd.to_datetime(time).strftime('%Y-%m-%d %H:%M')
+                            else:
+                                assert isinstance(plot_local_time,str), 'Unexpected plot_local_time format'
+                                plotting_properties['label'] = pd.to_datetime(time).strftime(plot_local_time)
 
                     # Set title if multiple datasets are compared
                     if ndatasets>1:
@@ -881,7 +907,11 @@ def plot_profile(datasets,
                     # Dataset will not be pivoted
                     fieldvalues = _get_field(df,field).values
                 else:
-                    slice_t = _get_slice(df_pivot,time,'time')
+                    if plot_local_time is not False:
+                        # specified times are in local time, convert back to UTC
+                        slice_t = _get_slice(df_pivot,time-timedelta_to_local,'time')
+                    else:
+                        slice_t = _get_slice(df_pivot,time,'time')
                     fieldvalues = _get_pivoted_field(slice_t,field).values.squeeze()
 
                 # Gather label, color, general options and dataset-specific options
@@ -892,7 +922,10 @@ def plot_profile(datasets,
                     plotting_properties = {**plotting_properties,**kwargs}
 
                 # Plot data
-                axv[axi].plot(fieldvalues,heightvalues,**plotting_properties)
+                try:
+                    axv[axi].plot(fieldvalues,heightvalues,**plotting_properties)
+                except ValueError as e:
+                    print(e,'--', time, 'not found in index?')
 
                 # Set field label if known
                 try:
