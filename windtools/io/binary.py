@@ -114,6 +114,12 @@ class BinaryFile(object):
         return self.read_float(N,dtype=np.float64)
 
     # binary output
+    def write(self,val,encoding='utf-8'):
+        if isinstance(val,str):
+            self.f.write(val.encode(encoding))
+        else:
+            self.f.write(val)
+
     def write_type(self,val,type):
         if hasattr(val,'__iter__'):
             N = len(val)
