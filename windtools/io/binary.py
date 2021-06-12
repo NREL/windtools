@@ -62,15 +62,15 @@ class BinaryFile(object):
         except struct.error:
             raise IOError
 
-    def read_char(self):
-        return self.f.read(1).decode('utf-8')
+    def read_char(self,encoding='utf-8'):
+        return self.f.read(1).decode(encoding)
 
-    def readline(self):
+    def readline(self,encoding='utf-8'):
         s = ''
-        b = self.read_char()
+        b = self.read_char(encoding)
         while not b in ['\n','']:
             s += b
-            b = self.f.read(1).decode('utf-8')
+            b = self.read_char(encoding)
         return s + b
 
     # integer reads
