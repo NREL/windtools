@@ -1,4 +1,15 @@
 #!/usr/bin/env python
+#
+# Usage
+# -----
+#   sowfa_time_left.py  # to scrape timing from latest log.*.${application}
+#   sowfa_time_left.py /path/to/solver.log  # to scrape timing from specific file
+# 
+# Options
+# -------
+#   -plot : plot timing history
+#   -write : write timing history
+#
 import sys
 import os
 import glob
