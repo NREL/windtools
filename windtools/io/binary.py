@@ -68,7 +68,7 @@ class BinaryFile:
     def readline(self):
         s = ''
         b = self.read_char()
-        while not b == '\n':
+        while not b in ['\n','']:
             s += b
             b = self.f.read(1).decode('utf-8')
         return s + b
