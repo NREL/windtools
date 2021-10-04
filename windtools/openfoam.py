@@ -9,6 +9,7 @@
 # CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+import os
 import re
 
 
@@ -46,7 +47,7 @@ class InputFile(dict):
         'table',
     ]
 
-    def __init__(self,fpath,nodef=False):
+    def __init__(self,fpath,nodef=False,include=False):
         """Create a dictionary of definitions from an OpenFOAM-style
         input file.
 
@@ -59,7 +60,12 @@ class InputFile(dict):
             vector values to be included from another OpenFOAM file,
             then create a generic 'data' parent object to contain the
             file data.
+        include : bool, optional
+            Read additional input files in place specified by '#include'
         """
+        self.fpath = fpath
+        self.nodef = nodef
+        self.include = include
         # read full file
         with open(fpath) as f:
             lines = f.readlines()
@@ -68,7 +74,9 @@ class InputFile(dict):
         # trim single-line comments and remove directives
         for i,line in enumerate(lines):
             line = line.strip()
-            if line.startswith('#'):
+            if include and line.startswith('#include'):
+                lines[i] = line
+            elif line.startswith('#'):
                 if self.DEBUG:
                     print('Ignoring directive:',line)
                 lines[i] = ''
@@ -159,7 +167,11 @@ class InputFile(dict):
                     assert (idx > 0), 'problem parsing '+string+' field'
                     string = txt[:idx].strip()
 
-            if string.endswith(';'):
+            if name == '#include':
+                names.append(name)
+                lines.append(string)
+                container.append(None)
+            elif string.endswith(';'):
                 # found single definition
                 if self.DEBUG: print('value=',string[:-1])
                 names.append(name)
@@ -219,7 +231,20 @@ class InputFile(dict):
             if containertype is not None:
                 print('container type:',containertype)
         defn = defn.strip()
-        if containertype is None:
+        if name == '#include':
+            includedfile = os.path.join(os.path.split(self.fpath)[0],
+                                        defn.strip('"'))
+            if self.DEBUG:
+                print('PARSING included file',includedfile)
+            tmp = InputFile(includedfile)
+            for key,val in tmp.items():
+                if parent is None:
+                    # parent is the InputFile object
+                    self.__setitem__(key,val)
+                else:
+                    assert isinstance(parent, dict)
+                    parent[key] = val
+        elif containertype is None:
             # set single value in parent 
             defn = self._try_cast(defn)
             # SET VALUE HERE
