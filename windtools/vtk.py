@@ -312,7 +312,7 @@ def readSingleVTK(vtkfullpath, res=10, squash=None):
     x1d = np.arange(xminbox,xmaxbox+dx,dx)
     y1d = np.arange(yminbox,ymaxbox+dy,dy)
     z1d = np.asarray([zlevel])            
-    [x3d,y3d,z3d] = np.meshgrid(x1d, y1d, z1d)
+    [x3d,y3d,z3d] = np.meshgrid(x1d, y1d, z1d, indexing='ij')
 
     n = np.ravel(x3d).shape[0]            
     coords_want = np.zeros(shape=(n,3))    
