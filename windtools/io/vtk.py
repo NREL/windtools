@@ -209,7 +209,7 @@ def VTK2xarray(x, y, z, out, t=None, dateref=None):
 
     # If data is on a plane (squash != None), get rid of the third dimesion
     if len(ds.z) == 1:
-        ds = ds.squeeze(dim='z')
+        ds = ds.squeeze(dim='z').drop_vars('z')
         
     if isinstance(t, (str, int, float)):
         if type(dateref) in (datetime, datetime.datetime, pd.Timestamp):
