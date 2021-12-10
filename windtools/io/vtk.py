@@ -84,7 +84,7 @@ def readVTK(vtkpath, sliceType=None, dateref=None, ti=None, tf=None, t=None, res
         Dataset containg the data with x, y [, z, time] as coordinates
 
 
-    written by Regis Thedin (regis.thedin@nrel.go)
+    written by Regis Thedin (regis.thedin@nrel.gov)
     """
 
 
