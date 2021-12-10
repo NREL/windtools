@@ -23,13 +23,13 @@ import datetime
 import pandas as pd
 import numpy as np
 
-def readVTK(vtkdir, vtk=None, sliceType=None, dateref=None, ti=None, tf=None, t=None, res=None, squash=None):
+def readVTK(vtkpath, sliceType=None, dateref=None, ti=None, tf=None, t=None, res=None, squash=None):
     """
     Read VTK file(s) and interpolate into a uniform grid based on the limits read from the VTK
     and resolution given.
 
     Function tailored to read multiple files with the following file structure:
-        full/path/to/<vtkdir>
+        full/path/to/<vtkpath>
         ├── <time1>
         ├── <time2>
         │   ├── <slicetype1>
@@ -40,23 +40,30 @@ def readVTK(vtkdir, vtk=None, sliceType=None, dateref=None, ti=None, tf=None, t=
         └── <timen>
 
     To read multiple VTKs, specify sliceType, ti, and tf;
-    to read a single VTK, specify either vtk, or sliceType and t.
+    To read a single VTK, there are two options: (i) specify full vtk path vtkpath, or
+        (ii) specity vtkpath, sliceType, and t.
 
     If reading more than a single VTK, it is assumed that they share the same coordinates.
 
     The function provides output for full 3-D VTK. If reading planar data, use the squash
     option. 
     
-    Example call:
-        ds = readVTK('full/path/to/vtks', sliceType='U_zNormal.80.vtk', ti= 133200, 133205,
+    Example calls:
+        # Read multiple
+        ds = readVTK('full/path/to/vtks', sliceType='U_zNormal.80.vtk', ti= 133200, tf=133205,
+                     dateref= pd.to_datetime('2010-05-14 12:00:00', res=10)
+        # Read single
+        ds = readVTK('full/path/to/vtks/133200/U_zNormal.80.vtk',
+                     dateref= pd.to_datetime('2010-05-14 12:00:00', res=10)
+        # Read single
+        ds = readVTK('full/path/to/vtks', sliceType='U_zNormal.80.vtk', t= 133200,
                      dateref= pd.to_datetime('2010-05-14 12:00:00', res=10)
 
     Parameters:
     -----------
-    vtkdir: str
-        Full path to the directory of time steps containing the VTK files
-    vtk: str (optional)
-        Single VTK to read, given with .vtk extension
+    vtkpath: str
+        Full path to the directory of time steps containing the VTK files (if reading
+        multiple); or full path to the vtk itself, with extension (if reading single)
     sliceType: str
         Common name of the collection of slices to be read. E.g. 'U_zNormal.80.vtk'
     dateref: datetime
@@ -77,25 +84,26 @@ def readVTK(vtkdir, vtk=None, sliceType=None, dateref=None, ti=None, tf=None, t=
         Dataset containg the data with x, y [, z, time] as coordinates
 
 
-    written by Regis Thedin (regis.thedin@nrel.gov)
+    written by Regis Thedin (regis.thedin@nrel.go)
     """
 
-    # Single slice was requested, using `vtk=...`
-    if vtk is not None:
-        if isinstance(vtk, str):
-            if vtk.endswith('.vtk'):
-                print(f'Reading a single VTK')
-                x, y, z, out = readSingleVTK(os.path.join(vtkdir,vtk), res=res, squash=squash)
+
+    # Single slice was requested, using `vtlpath='some/path/slice.vtk`
+    if os.path.isfile(vtkpath):
+        if isinstance(vtkpath, str):
+            if vtkpath.endswith('.vtk'):
+                print(f'Reading a single VTK. For output with `datetime` as coordinate, specify the path, sliceType, and t (see docstrings for example)')
+                x, y, z, out = readSingleVTK(vtkpath, res=res, squash=squash)
                 ds = VTK2xarray(x, y, z, out)
                 return ds
             else:
-                raise SyntaxError("Single vtk specification using vtk='file.vtk' should include the extension")
+                raise SyntaxError("Single vtk specification using vtkpath='/path/to/file.vtk' should include the extension")
         else:
-            raise SyntaxError("The vtk='file.vtk' specification should be used to read a single VTK. " \
-                              "For multiple VTKs, specify sliceType, ti, and tf.")
+            raise SyntaxError("The vtkpath='path/to/vtks' should be a string.")
 
 
     # Some checks
+    assert os.path.isdir(vtkpath), f'Directory of VTKs given {vtkpath} is not a directory. For single VTK, see docstrings for example.'
     if not sliceType.endswith('.vtk'):
         raise SyntaxError('sliceType should be given with .vtk extension')
     if ti!=None and tf!=None:
@@ -110,10 +118,10 @@ def readVTK(vtkdir, vtk=None, sliceType=None, dateref=None, ti=None, tf=None, t=
     else:
         if t==None:
             raise ValueError("You have to specify at least one time. If a single VTK is needed, use " \
-                             "vtk='full/path/to/filename.vtk' ")
+                             "vtkpath='path/to/file.vtk' ")
 
     # Get the time directories
-    times_str = sorted(os.listdir(vtkdir))
+    times_str = sorted(os.listdir(vtkpath))
     times_float = [float(i) for i in times_str]
 
     if t is not None:
@@ -125,7 +133,7 @@ def readVTK(vtkdir, vtk=None, sliceType=None, dateref=None, ti=None, tf=None, t=
             raise ValueError(f'No VTK found for time {t}. The last available VTK is at t={times_float[-1]}')
         t = times_str[pos_t]
         print(f'Reading a single VTK for time {float(t)}')
-        x, y, z, out = readSingleVTK(os.path.join(vtkdir,t,sliceType), res=res, squash=squash)
+        x, y, z, out = readSingleVTK(os.path.join(vtkpath,t,sliceType), res=res, squash=squash)
         ds = VTK2xarray(x, y, z, out, t, dateref)
         return ds
 
@@ -143,7 +151,7 @@ def readVTK(vtkdir, vtk=None, sliceType=None, dateref=None, ti=None, tf=None, t=
     dslist = []
     for i, t in enumerate(times_str[pos_ti:pos_tf]):
         print(f'Iteration {i}: processing time {t}...  {100*i/nvtk:.2f}%', end='\r', flush=True)
-        x, y, z, out = readSingleVTK(os.path.join(vtkdir,t,sliceType), res=res, squash=squash)
+        x, y, z, out = readSingleVTK(os.path.join(vtkpath,t,sliceType), res=res, squash=squash)
         current_ds = VTK2xarray(x, y, z, out, t, dateref)
         dslist.append(current_ds)
 
