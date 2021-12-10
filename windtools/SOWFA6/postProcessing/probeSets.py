@@ -16,7 +16,7 @@ written by Regis Thedin (regis.thedin@nrel.gov)
 
 """
 from __future__ import print_function
-import os
+import os, glob
 import pandas as pd
 import numpy as np
 from .reader import Reader
@@ -106,7 +106,8 @@ class ProbeSets(Reader):
         self.tstart = tstart
         self.tend = tend
         self.varList = varList
-        self._allVars = {'U','UMean','T','TMean','TPrimeUPrimeMean','UPrime2Mean','p_rgh'}
+        self._allVars = {'U','T','p_rgh','UMean','TMean','UPrime2Mean','TPrimeUPrimeMean'}
+        self._printzagl = False
         super().__init__(dpath,includeDt=True,**kwargs)
             
 
@@ -147,7 +148,10 @@ class ProbeSets(Reader):
                 for prefix in fprefix:
                     for param in fparam:
                         for suffix in fsuffix:
-                            fileList.append( prefix + param + '_' + var + suffix )
+                            try:
+                                fileList.append( prefix + param + '_' + var + suffix )
+                            except TypeError:
+                                raise ValueError('Specify fprefix, fparam, varList, and fsuffix (check spelling)')
             outputs = fileList
 
         # Get list of times and trim the data
@@ -165,26 +169,32 @@ class ProbeSets(Reader):
         if not tdirList:
             raise ValueError('No time directories found')
         
-        # Process all data
+        # Process all data. Loop on files, not variables. the files, however, contain a single varible. 
         for field in outputs:
-            arrays = [ self._read_data( tdir,field ) for tdir in tdirList ]
+            # parse the name to create the right variable (var is always a list)
+            param, var = self._parseProbeName(field)
+            # Read the file that contains the variable, getting only the desired var
+            arrays = [ self._read_data( tdir, field, param, var ) for tdir in tdirList ]
             # combine into a single array and trim end of time series
             arrays = np.concatenate(arrays)[:self.imax,:]    
-            # parse the name to create the right variable
-            param, var = self._parseProbeName(field)
-            # add the zagl to the array
-            arrays = np.hstack((arrays[:,:4], \
-                                np.full((arrays.shape[0],1),param), \
-                                arrays[:,4:]))
-            # append to (or create) a variable attribute
+
+           # if `param` is an integer, consider that zagl and add to the array. Otherwise, skip it
+            if isinstance(param, int):
+                print('Param is integer. Assuming it means zagl and adding it')
+                # add the zagl to the array
+                arrays = np.hstack((arrays[:,:4], \
+                                    np.full((arrays.shape[0],1),param), \
+                                    arrays[:,4:]))
+                self._printzagl = True
+
             try:
                 setattr(self,var,np.concatenate((getattr(self,var),arrays)))
             except AttributeError:
                 setattr( self, var, arrays )
-                
-            if not var in self._processed:   
+
+            if not var in self._processed:  
                 self._processed.append(var)
-            print('  read',field) 
+            print(f'  read {self.fprefix}{param}_*{self.fsuffix}, variable {var}') 
 
         self.t = np.unique(arrays[:,0])
         self.Nt = len(self.t)
@@ -198,24 +208,82 @@ class ProbeSets(Reader):
 
         
     def _parseProbeName(self, field):
-        # Example: get 'vmasts_50mGrid_h30_T.xy' and return param=30, var='T'
-        # Remove the prefix from the full field name
-        f = field.replace(self.fprefix,'')
-        # Substitude the first underscore with a dot and split array
-        f = f.replace('_','.',1).split('.')
-        for i in set(f).intersection(self._allVars):
-            var = i
-        param = int(f[-3])
+        # This function will only receive `field` with one variable, even if 
+        # that file does not exist.
+        # Examples: gets 'vmasts_50mGrid_h30_T.xy' and returns param=30, var='T'
+        #           gets 'vmasts_m1_1_U.xy' and returns param='m1_1', var='U'
+        #           it will never get 'vmasts_m1_2_T_p_rgh'
+
+        # Remove the prefix and suffix from the full field name
+        f = field.replace(self.fprefix,'').replace(self.fsuffix,'')
+        
+        # Find the variable(s) that are in the field name
+        for v in self._allVars:
+            if v in f:
+                var = v
+                # remove the variable fromm field, alongside preceding underscore
+                f = f.replace('_'+v, '')
+                break
+
+        # what is left is the param
+        if f.isdigit():  param = int(f)
+        else:            param = f
+
         return param, var
     
+
+    def _getFileContainingVar(self, dpath, param, var):
+        # Example: gets 'vmast_50_T.xy' and returns 'vmast_50_T_p_rgh.xy' and pos=1
+        #          gets 'vmast_50_T.xy' and returns 'vmast_50_T.xy' and pos=1
+        #          gets 'vmast_50_T.xy' and returns 'vmast_50_p_rgh_T.xy' and pos=2
+
+        # Get filename that has `param` and `var` in it
+        fname = os.path.basename(glob.glob(os.path.join(dpath,'*'+param+'_*'+var+'*'))[0])
+
+        # Get all the variables present in the current file. E.g.: ['T'], ['T','prgh']
+        varsInFname = fname.replace(self.fprefix,'').replace(param+'_','').replace(self.fsuffix,'') \
+                           .replace('p_rgh','prgh').split('_')
+
+        # Find position of the variable. First get rid of _ in p_rgh
+        pos = varsInFname.index(var.replace('_',''))
+
+        # Length of the variable
+        if var in ['T','TMean','p_rgh']:
+            lenvar = 1
+        elif var in ['U','UMean']:
+            lenvar = 3
+        elif var in ['TPrimeUPrimeMean','UPrime2Mean']:
+            lenvar = 6
+        else:
+            raise NotImplementedError('Unknown variable name. Consider expanding the class.')
+
+        pos = pos*lenvar+1
         
-    def _read_data(self, dpath, fname): 
-        fpath = dpath + os.sep + fname    
+        return fname, pos, lenvar
+
+
+    def _read_data(self, dpath, fname, param, var): 
+
+        fpath = dpath + os.sep + fname 
+        pos = 0
+
+        # The sampling set groups scalars, vectors, and tensors in the same file. Due to this, 
+        # files with names such as 'vmasts_h30_T_p_rgh.xy' will exist. If the desired variable
+        # is part of  a file with multiple variables, then the `fname` filename passed to this
+        # function will not exist. Thus, we get the actual filename that contains the desired 
+        # variable in its name and what position (column) that variable is in.
+        if not os.path.isfile(fpath):
+            actualfname, pos, lenvar = self._getFileContainingVar(dpath, param, var)
+            fpath = dpath + os.sep + actualfname
+
         currentTime = float(os.path.basename(dpath))
         with open(fpath) as f:
             try:
                 # read the actual data from probes
                 array = self._read_probe_posAndData(f)
+                # get the correct location of the var if needed
+                if pos != 0:
+                    array = np.c_[array[:,0:3], array[:,2+pos:2+pos+lenvar]]
                 # add current time step info to first column
                 array = np.c_[np.full(array.shape[0],currentTime), array]
             except IOError:
@@ -279,6 +347,7 @@ class ProbeSets(Reader):
                 
         # create dataframes for each field
         print('Creating dataframe ...')
+        printzagl = self._printzagl
         data = {}
         for var in fields:
             print('processing', var)
@@ -287,22 +356,30 @@ class ProbeSets(Reader):
             data['time'] = F[:,0]
             data['x'] = F[:,1]
             data['y'] = F[:,2]
-            data['zabs'] = F[:,3]
-            data['zagl'] = F[:,4]
-            if F.shape[1]==6:
+            if printzagl:
+                data['zabs'] = F[:,3]
+                data['zagl'] = F[:,4]
+            else:
+                data['z'] = F[:,3]
+            if F.shape[1]==5+printzagl:
                 # scalar
-                data[var] = F[:,5:].flatten()
-            elif F.shape[1]==8:
+                data[var] = F[:,4+printzagl:].flatten()
+            elif F.shape[1]==7+printzagl:
                 # vector
                 for j,name in enumerate(['x','y','z']):
-                    data[var+name] = F[:,5+j].flatten()
-            elif F.shape[1]==11:
+                    data[var+name] = F[:,4+printzagl+j].flatten()
+            elif F.shape[1]==10+printzagl:
                 # symmetric tensor
                 for j,name in enumerate(['xx','xy','xz','yy','yz','zz']):
-                    data[var+name] = F[:,5+j].flatten()
+                    data[var+name] = F[:,4+printzagl+j].flatten()
                     
         df = pd.DataFrame(data=data,dtype=dtype)
-        return df.sort_values(['time','x','y','zabs','zagl']).set_index(['time','x','y','zagl'])
+        if printzagl:
+            df = df.sort_values(['time','x','y','zabs','zagl']).set_index(['time','x','y','zagl'])
+        else:
+            df = df.sort_values(['time','x','y','z']).set_index(['time','x','y','z'])
+
+        return df
         
     def to_netcdf(self,fname,fieldDescriptions={},fieldUnits={}):
         raise NotImplementedError('Not available for ProbeSet class.')
