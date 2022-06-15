@@ -25,12 +25,12 @@ class ABLStatistics(object):
         return ds
 
     def _load_timeseries(self):
-        ds = xr.open_dataset(self.fpath)
+        ds = xr.load_dataset(self.fpath)
         ds = self._setup_time_coords(ds)
         self.ds = ds
 
     def _load_timeheight_profiles(self):
-        ds = xr.open_dataset(self.fpath, group='mean_profiles')
+        ds = xr.load_dataset(self.fpath, group='mean_profiles')
         ds = ds.rename({'h':'height'})
         ds = ds.assign_coords({self.time_coord: ('num_time_steps',self.ds.coords[self.time_coord]),
                                'height': ds['height']})
