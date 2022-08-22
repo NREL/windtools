@@ -120,9 +120,12 @@ def readVTK(vtkpath, sliceType=None, dateref=None, ti=None, tf=None, t=None, res
             raise ValueError("You have to specify at least one time. If a single VTK is needed, use " \
                              "vtkpath='path/to/file.vtk' ")
 
-    # Get the time directories
-    times_str = sorted(os.listdir(vtkpath))
+    # Get the time directories. We can't just sort straight up because of 1, 10, 100 gets ordered differently.
+    times_str = os.listdir(vtkpath)
     times_float = [float(i) for i in times_str]
+    sortInd =  np.argsort(times_float)
+    times_float = np.sort(times_float)
+    times_str = np.array(times_str)[sortInd]
 
     if t is not None:
         # Single time was requested
