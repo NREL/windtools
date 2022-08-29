@@ -32,8 +32,11 @@ class ABLStatistics(object):
     def _load_timeheight_profiles(self):
         ds = xr.load_dataset(self.fpath, group='mean_profiles')
         ds = ds.rename({'h':'height'})
-        ds = ds.assign_coords({self.time_coord: ('num_time_steps',self.ds.coords[self.time_coord]),
-                               'height': ds['height']})
+        times = self.ds.coords[self.time_coord].values
+        ds = ds.assign_coords({
+            self.time_coord: ('num_time_steps',times),
+            'height': ds['height'],
+        })
         ds = ds.swap_dims({'num_time_steps':self.time_coord, 'nlevels':'height'})
         ds = ds.transpose(self.time_coord,'height')
         self.ds = xr.combine_by_coords([self.ds, ds])
