@@ -195,8 +195,13 @@ class Sampling(object):
                 new_all['v'] = (ordereddims, vely_all)
                 new_all['w'] = (ordereddims, velz_all)
 
+                if 'temperature' in list(ds.keys()):
+                    temp_old_all = ds['temperature'].isel(num_time_steps=slice(chunk_dti, chunk_dtf, chunk_step)).values
+                    temp_all = np.reshape(temp_old_all, (chunk_ndt, self.nz, self.ny, self.nx)).T
+                    new_all['temperature'] = (ordereddims, temp_all)
+
                 if outputPath is not None:
-                    # save file
+                    # save ile
                     filename = os.path.join(outputPath,f'temp_{group}_dt{chunk_dti}_{chunk_dtf-1}.nc')
                     new_all.to_netcdf(filename)
                     filenamelist.append(filename)
@@ -221,7 +226,8 @@ class Sampling(object):
     def _read_probe_sampler(self,ds):
         raise NotImplementedError(f'Sampling `ProbeSampler` is not implemented. Consider implementing it.')
 
-    
+
+
     def to_vtk(self, dsOrGroup, outputPath, verbose=True, offsetz=0, itime_i=0, itime_f=-1):
         '''
         Writes VTKs for all time stamps present in ds
@@ -281,5 +287,37 @@ class Sampling(object):
                             point = dstime.sel(x=x,y=y,z=z)
                             vtk.write(f'{point.u.values:.5f}\t{point.v.values:.5f}\t{point.w.values:.5f}\n')
             
+
+
+def addDatetime(ds,dt,origin=pd.to_datetime('2000-01-01 00:00:00'), computemean=True):
+    
+    if dt <= 0:
+        raise ValueError(f'The dt should be positive. Received {dt}.')
+
+    # Add time array
+    ds['time'] = (('samplingtimestep'), ds['samplingtimestep'].values*dt)
+
+    # Save original sampling time step array
+    samplingtimestep = ds['samplingtimestep'].values
+
+    # Rename and add datetime information
+    ds = ds.rename({'samplingtimestep':'datetime'})
+    ds = ds.assign_coords({'datetime':pd.to_datetime(ds['time'], unit='s', origin=origin)})
+
+    # Add back the original sampling time step
+    ds['samplingtimestep'] = (('datetime'), samplingtimestep)
+
+    if computemean:
+        # Add mean computations
+        ds['up'] = ds['u'] - ds['u'].mean(dim='datetime')
+        ds['vp'] = ds['v'] - ds['v'].mean(dim='datetime')
+        ds['wp'] = ds['w'] - ds['w'].mean(dim='datetime')
+
+    return ds
+
+
+
+
+
 
 
