@@ -65,7 +65,14 @@ class Sampling(object):
         return header+''.join([f'    {g}\n' for g in self.groups])
 
 
-    def _get_properties(self, ds):
+    def getGroupProperties(self, ds=None, group=None):
+
+        if ds is None and group is None:
+            raise ValueError(f'Either `ds` or `group` must be specified')
+
+        if ds is None and group is not None:
+            ds = xr.open_dataset(self.fpath, group=group, engine='netcdf4')
+
         self.sampling_type = ds.sampling_type
 
         [self.nx, self.ny, self.nz] = ds.ijk_dims
@@ -90,6 +97,7 @@ class Sampling(object):
         groups = [groups] if isinstance(groups,str) else groups
         return groups
 
+
     def set_dt(self, dt):
         self.dt = dt
 
@@ -105,31 +113,53 @@ class Sampling(object):
         return ds_all
 
 
-    def read_single_group(self, group, verbose=False, nchunks=1, chunk_step=1, outputPath=None):
+    def read_single_group(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['u','v','w'], simCompleted=False, verbose=False):
         '''
 
-        nchunks: int
-            Number of chunks that the whole sampling netCDF will be split for reading and processing
-        chunk_step: int
-            Get the output at every chunk_step steps. For instance, if a sampling needs to be done
+        step: int
+            Get the output at every step steps. For instance, if a sampling needs to be done
             at 2 s, and other at 0.5 s, then save everything at 0.5 s and when reading the group 
-            related to the 2-s sampling, set chunk_step to 4
+            related to the 2-s sampling, set step to 4
         outputPath: str (default:None)
             If different than None, it is the directory where intermediate and final (concatenated)
             files will be saved.
+        var: str, list of str
+            variables to be outputted. By defaul, u, v, w. If temperature and tke are available,
+            use either var='all' or var=['u','v','w','tke'], for example.
+        simCompleted: bool, default False
+            If the simulation is still running, the nc file needs to be open using `load_dataset`. 
+            This function does _not_ load the data lazily, so it is prohibitively expensive to use
+            it in large cases. The function `open_dataset` does load the data lazily, however, it
+            breaks any currently running simulation as it leaves the file open for reading, clashing
+            with the code that has it open for writing. If the simulation is done, the file is no
+            longer open for writing and can be opened for reading using lazy `open_dataset`. This
+            bool variable ensures that you _explicitly_ state the simulation is done, so that you
+            don't crash something by mistake. simCompleted set to true will likely need to come with
+            the specification of nchunks>1, since memory is likely an issue in these cases.
 
         '''
         
-        dsraw = xr.load_dataset(self.fpath, group=group, engine='netcdf4')
+        if simCompleted:
+            dsraw = xr.open_dataset(self.fpath, group=group, engine='netcdf4')
+        else:
+            dsraw = xr.load_dataset(self.fpath, group=group, engine='netcdf4')
 
-        self._get_properties(dsraw)
+
+        if isinstance(var,str): var = [var]
+        if var==['all']:
+            self.reqvars = ['u','v','w','temperature','tke']
+        else:
+            self.reqvars = var
+
+
+        self.getGroupProperties(ds = dsraw)
 
         if   self.sampling_type == 'LineSampler':
             ds = self._read_line_sampler(dsraw)
         elif self.sampling_type == 'LidarSampler':
             ds = self._read_lidar_sampler(dsraw)
         elif self.sampling_type == 'PlaneSampler':
-            ds = self._read_plane_sampler(dsraw, verbose, nchunks, chunk_step, outputPath)
+            ds = self._read_plane_sampler(dsraw, group, itime, ftime, step, outputPath, verbose)
         elif self.sampling_type == 'ProbeSampler':
             ds = self._read_probe_sampler(dsraw)
         else:
@@ -144,83 +174,64 @@ class Sampling(object):
     def _read_lidar_sampler(self,ds):
         raise NotImplementedError(f'Sampling `LidarSampler` is not implemented. Consider implementing it.')
 
-    def _read_plane_sampler(self, ds, verbose, nchunks, chunk_step, outputPath):
+    def _read_plane_sampler(self, ds, group, itime, ftime, step, outputPath, verbose):
 
-        nchunks = 1
-        chunk_ndt = int(self.ndt/nchunks)
-        chunk_dti_list = [int(i) for i in np.floor(np.linspace(0,self.ndt,nchunks,endpoint=False))]
-        chunk_dtf_list = [i+chunk_ndt for i in chunk_dti_list]
+        if ftime == -1:
+            ftime = self.ndt
 
-        # Accumulate list of intermediate filenames to open all of them with open_mfdataset
-        filenamelist = []
+        # Unformatted arrays
+        velx_old_all = ds['velocityx'].isel(num_time_steps=slice(itime, ftime, step)).values
+        vely_old_all = ds['velocityy'].isel(num_time_steps=slice(itime, ftime, step)).values
+        velz_old_all = ds['velocityz'].isel(num_time_steps=slice(itime, ftime, step)).values
+ 
+        # Number of time steps 
+        ndt = len(ds['velocityx'].isel(num_time_steps=slice(itime,ftime,step)).num_time_steps)
 
-        if verbose:
-            print(f'Using {nchunks} chunk(s), with {chunk_ndt} time steps each.')
-            print(f'The start/end timestep of each chunk is as follows:')
-            print(*list(zip(chunk_dti_list,chunk_dtf_list)), sep='\n')
+        velx_all = np.reshape(velx_old_all, (ndt, self.nz, self.ny, self.nx)).T
+        vely_all = np.reshape(vely_old_all, (ndt, self.nz, self.ny, self.nx)).T
+        velz_all = np.reshape(velz_old_all, (ndt, self.nz, self.ny, self.nx)).T
 
+        # The order of the dimensions varies depending on the `normal`
+        if   (ds.axis3 == [1,0,0]).all(): ordereddims = ['y','z','x','samplingtimestep']
+        elif (ds.axis3 == [0,1,0]).all(): ordereddims = ['x','z','y','samplingtimestep']
+        elif (ds.axis3 == [0,0,1]).all(): ordereddims = ['x','y','z','samplingtimestep']
+        else: raise ValueError('Unknown normal plane')
 
-        for chunk_dti in chunk_dti_list: #[:2]:
-            chunk_dtf = chunk_dti+chunk_ndt
-            
-            if verbose:
-                print(f'Processing chunk with start/end time step: {chunk_dti}, {chunk_dtf}')
+        new_all = xr.DataArray(data = velx_all, 
+                       dims = ordereddims,
+                       coords=dict(
+                           x=('x',self.x),
+                           y=('y',self.y),  
+                           z=('z',self.z),
+                           samplingtimestep=('samplingtimestep',range(itime, ftime, step)),
+                       )
+                      )
+        new_all = new_all.to_dataset(name='u')
+        new_all['v'] = (ordereddims, vely_all)
+        new_all['w'] = (ordereddims, velz_all)
 
-            try:
-                # Unformatted arrays
-                velx_old_all = ds['velocityx'].isel(num_time_steps=slice(chunk_dti, chunk_dtf, chunk_step)).values
-                vely_old_all = ds['velocityy'].isel(num_time_steps=slice(chunk_dti, chunk_dtf, chunk_step)).values
-                velz_old_all = ds['velocityz'].isel(num_time_steps=slice(chunk_dti, chunk_dtf, chunk_step)).values
+        if 'temperature' in list(ds.keys()) and 'temperature' in self.reqvars:
+            temp_old_all = ds['temperature'].isel(num_time_steps=slice(itime, ftime, step)).values
+            temp_all = np.reshape(temp_old_all, (ndt, self.nz, self.ny, self.nx)).T
+            new_all['temperature'] = (ordereddims, temp_all)
 
-                velx_all = np.reshape(velx_old_all, (chunk_ndt, self.nz, self.ny, self.nx)).T
-                vely_all = np.reshape(vely_old_all, (chunk_ndt, self.nz, self.ny, self.nx)).T
-                velz_all = np.reshape(velz_old_all, (chunk_ndt, self.nz, self.ny, self.nx)).T
+        if 'tke' in list(ds.keys()) and 'tke' in self.reqvars:
+            tke_old_all = ds['tke'].isel(num_time_steps=slice(itime, ftime, step)).values
+            tke_all = np.reshape(tke_old_all, (ndt, self.nz, self.ny, self.nx)).T
+            new_all['tke'] = (ordereddims, tke_all)
 
-                # The order of the dimensions varies depending on the `normal`
-                if   (ds.axis3 == [1,0,0]).all(): ordereddims = ['y','z','x','samplingtimestep']
-                elif (ds.axis3 == [0,1,0]).all(): ordereddims = ['x','z','y','samplingtimestep']
-                elif (ds.axis3 == [0,0,1]).all(): ordereddims = ['x','y','z','samplingtimestep']
-                else: raise ValueError('Unknown normal plane')
-
-                new_all = xr.DataArray(data = velx_all, 
-                               dims = ordereddims,
-                               coords=dict(
-                                   x=('x',self.x),
-                                   y=('y',self.y),  
-                                   z=('z',self.z),
-                                   samplingtimestep=('samplingtimestep',range(chunk_dti, chunk_dtf)),
-                               )
-                              )
-                new_all = new_all.to_dataset(name='u')
-                new_all['v'] = (ordereddims, vely_all)
-                new_all['w'] = (ordereddims, velz_all)
-
-                if 'temperature' in list(ds.keys()):
-                    temp_old_all = ds['temperature'].isel(num_time_steps=slice(chunk_dti, chunk_dtf, chunk_step)).values
-                    temp_all = np.reshape(temp_old_all, (chunk_ndt, self.nz, self.ny, self.nx)).T
-                    new_all['temperature'] = (ordereddims, temp_all)
-
-                if outputPath is not None:
-                    # save ile
-                    filename = os.path.join(outputPath,f'temp_{group}_dt{chunk_dti}_{chunk_dtf-1}.nc')
-                    new_all.to_netcdf(filename)
-                    filenamelist.append(filename)
-            
-            except MemoryError as e:
-                print(f'    MemoryError: {e}.\n    Try increasing the number of chunks')
-                raise
-
-    
         if outputPath is not None:
-            # Concat all files and save a single one
-            dsall = xr.open_mfdataset(filenamelist)
-            dsall.to_netcdf(outputPath,f'{group}_dt{chunk_dti_list[0]}_{chunk_dtf_list[-1]}.nc')
-        else:
-            dsall = new_all
+            if outputPath.endswith('.zarr'):
+                print(f'Saving {outputPath}')
+                new_all.to_zarr(outputPath)
+            elif outputPath.endswith('.nc.'):
+                print(f'Saving {outputPath}')
+                new_all.to_netcdf(outputPath)
+            else:
+                print(f'Saving {group}.zarr')
+                new_all.to_zarr(os.path.join(outputPath,f'{group}.zarr'))
 
-        # ds['time'] = (('samplingtimestep'),ds.samplingtimestep.values*150)
-
-        return dsall
+        return new_all
 
 
     def _read_probe_sampler(self,ds):
@@ -308,10 +319,21 @@ def addDatetime(ds,dt,origin=pd.to_datetime('2000-01-01 00:00:00'), computemean=
     ds['samplingtimestep'] = (('datetime'), samplingtimestep)
 
     if computemean:
+        # Compute or grab means (mean will be available if chunked saving)
+        if 'umean' in ds.keys():
+            meanu = ds['umean']
+            meanv = ds['vmean']
+            meanw = ds['wmean']
+            ds = ds.drop_vars(['umean','vmean','wmean'])
+        else:
+            meanu = ds['u'].mean(dim='datetime')
+            meanv = ds['v'].mean(dim='datetime')
+            meanw = ds['w'].mean(dim='datetime')
+
         # Add mean computations
-        ds['up'] = ds['u'] - ds['u'].mean(dim='datetime')
-        ds['vp'] = ds['v'] - ds['v'].mean(dim='datetime')
-        ds['wp'] = ds['w'] - ds['w'].mean(dim='datetime')
+        ds['up'] = ds['u'] - meanu
+        ds['vp'] = ds['v'] - meanv
+        ds['wp'] = ds['w'] - meanw
 
     return ds
 
