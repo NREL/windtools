@@ -396,7 +396,7 @@ class Sampling(object):
 
 
 
-    def to_vtk(self, dsOrGroup, outputPath, verbose=True, offsetz=0, itime_i=0, itime_f=-1, t0=None, dt=None):
+    def to_vtk(self, dsOrGroup, outputPath, verbose=True, offsetz=0, itime_i=0, itime_f=-1, t0=None, dt=None, vtkstartind=0):
         '''
         Writes VTKs for all time stamps present in ds
 
@@ -420,6 +420,10 @@ class Sampling(object):
         dt: int, float
             Time step of the underlying data, in seconds. If not none, the files created will have the
             actual time.  If None, the files created follow FAST.Farm convention of time step numbering
+        vtkstartind: int
+            Index by which the names of the vtk files will be shifted. This is useful for saving files
+            starting from a non-zero time-step when AMR-Wind crashes unxpectedly and is restarted using
+            a savefile.
 
         '''
         if not os.path.exists(outputPath):
@@ -466,7 +470,7 @@ class Sampling(object):
             if timegiven:
                 currentvtk = os.path.join(outputPath,f'Amb.time{t0+t*dt:1f}s.vtk')
             else:
-                currentvtk = os.path.join(outputPath,f'Amb.t{t}.vtk')
+                currentvtk = os.path.join(outputPath,f'Amb.t{vtkstartind+t}.vtk')
 
             if verbose:
                 print(f'Saving {currentvtk}', flush=True)
@@ -485,12 +489,20 @@ class Sampling(object):
                 vtk.write(f'POINT_DATA {self.nx*self.ny*self.nz}\n')
                 vtk.write(f'FIELD attributes 1\n')
                 vtk.write(f'U 3 {self.nx*self.ny*self.nz} float\n')
-                for z in zarray:
-                    for y in yarray:
-                        for x in xarray:
-                            point = dstime.sel(x=x,y=y,z=z)
-                            vtk.write(f'{point.u.values:.5f}\t{point.v.values:.5f}\t{point.w.values:.5f}\n')
-            
+                
+                # Read the all u,v,w values in a single function call
+                point = dstime.sel(x=xarray,y=yarray,z=zarray)
+                
+                # Reshape the data to get it in an order required by FAST.FARM
+                uval = np.array(point.u.values)
+                vval = np.array(point.v.values)
+                wval = np.array(point.w.values)
+                uval = uval.transpose((2,1,0)).reshape(-1)
+                vval = vval.transpose((2,1,0)).reshape(-1)
+                wval = wval.transpose((2,1,0)).reshape(-1)
+                
+                # Write the reshaped numpy array to the file
+                np.savetxt(vtk,np.stack((uval,vval,wval)).transpose(),fmt='%.5f',delimiter='\t',newline='\n',encoding='utf-8')
 
 
 def addDatetime(ds,dt,origin=pd.to_datetime('2000-01-01 00:00:00'), computemean=True):
