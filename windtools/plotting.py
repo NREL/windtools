@@ -29,6 +29,7 @@ from scipy.signal import welch
 # - all superscript: e.g., "K m s^{-1}"
 fieldlabels_default_units = {
     'wspd': r'Wind speed [m/s]',
+    'hvelmag': r'Horizontal wind speed [m/s]',
     'wdir': r'Wind direction [$^\circ$]',
     'u': r'u [m/s]', 'Ux': r'$u$ [m/s]',
     'v': r'v [m/s]', 'Uy': r'$v$ [m/s]',
@@ -42,7 +43,15 @@ fieldlabels_default_units = {
     'uw': r'$\langle u^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',  'UUxz': r'$\langle u^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',
     'vw': r'$\langle v^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',  'UUyz': r'$\langle v^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',
     'tw': r'$\langle w^\prime \theta^\prime \rangle \;[\mathrm{Km/s}]$', 'TUz': r'$\langle w^\prime \theta^\prime \rangle \;[\mathrm{Km/s}]$',
+    "u'u'_r": r'$\langle u^\prime u^\prime \rangle \;[\mathrm{m^2/s^2}]$',  'UUxx': r'$\langle u^\prime u^\prime \rangle \;[\mathrm{m^2/s^2}]$',
+    "v'v'_r": r'$\langle v^\prime v^\prime \rangle \;[\mathrm{m^2/s^2}]$',  'UUyy': r'$\langle v^\prime v^\prime \rangle \;[\mathrm{m^2/s^2}]$',
+    "w'w'_r": r'$\langle w^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',  'UUzz': r'$\langle w^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',
+    "u'v'_r": r'$\langle u^\prime v^\prime \rangle \;[\mathrm{m^2/s^2}]$',  'UUxy': r'$\langle u^\prime v^\prime \rangle \;[\mathrm{m^2/s^2}]$',
+    "u'w'_r": r'$\langle u^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',  'UUxz': r'$\langle u^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',
+    "v'w'_r": r'$\langle v^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',  'UUyz': r'$\langle v^\prime w^\prime \rangle \;[\mathrm{m^2/s^2}]$',
+    "w'theta'_r": r'$\langle w^\prime \theta^\prime \rangle \;[\mathrm{Km/s}]$', 'TUz': r'$\langle w^\prime \theta^\prime \rangle \;[\mathrm{Km/s}]$',
     'TI': r'TI $[-]$',
+    'TI_TKE': r'TI (TKE) $[-]$',
     'TKE': r'TKE $[\mathrm{m^2/s^2}]$',
 }
 fieldlabels_superscript_units = {
