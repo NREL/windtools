@@ -266,11 +266,14 @@ class Sampling(object):
         #chunksize = (-1,'auto', 'auto', 'auto')  # (time,space); auto means Dask figures out the value, -1 means entire dim
         # ValueError: Chunks and shape must be of the same length/dimension. Got chunks=(-1, 'auto', 'auto', 'auto'), shape=(3600, 863744)
 
-        chunksize = (-1,'auto')  # (time,space); auto means Dask figures out the value, -1 means entire dim
+        #chunksize = (-1,'auto')  # (time,space); auto means Dask figures out the value, -1 means entire dim
         timeslice = slice(itime, ftime, step)
-        velx_old_all = da.from_array(ds['velocityx'], chunks=chunksize)[timeslice,:]
-        vely_old_all = da.from_array(ds['velocityy'], chunks=chunksize)[timeslice,:]
-        velz_old_all = da.from_array(ds['velocityz'], chunks=chunksize)[timeslice,:]
+        velx_old_all = da.from_array(ds['velocityx'] )[timeslice,:]
+        vely_old_all = da.from_array(ds['velocityy'] )[timeslice,:]
+        velz_old_all = da.from_array(ds['velocityz'] )[timeslice,:]
+        #velx_old_all = da.from_array(ds['velocityx'], chunks=chunksize)[timeslice,:]
+        #vely_old_all = da.from_array(ds['velocityy'], chunks=chunksize)[timeslice,:]
+        #velz_old_all = da.from_array(ds['velocityz'], chunks=chunksize)[timeslice,:]
 
         # Number of time steps
         ndt = len(velx_old_all)
