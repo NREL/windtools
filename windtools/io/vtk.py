@@ -23,7 +23,7 @@ import datetime
 import pandas as pd
 import numpy as np
 
-def readVTK(vtkpath, sliceType=None, dateref=None, ti=None, tf=None, t=None, res=None, squash=None):
+def readVTK(vtkpath, sliceType=None, dateref=None, ti=None, tf=None, t=None, res=None, squash=None, ang=None):
     """
     Read VTK file(s) and interpolate into a uniform grid based on the limits read from the VTK
     and resolution given.
@@ -77,6 +77,8 @@ def readVTK(vtkpath, sliceType=None, dateref=None, ti=None, tf=None, t=None, res
         If tuple, provide resolution in x, y, and z, in order
     squash: str; 'x', 'y', or 'z' only
         Squash the VTK into a plane (useful for terrain slices)
+    ang: scalar
+        Angle of inclined slice to be read. Only supports slices rotated in the z-normal plane
 
     Returns:
     --------
@@ -93,7 +95,7 @@ def readVTK(vtkpath, sliceType=None, dateref=None, ti=None, tf=None, t=None, res
         if isinstance(vtkpath, str):
             if vtkpath.endswith('.vtk'):
                 print(f'Reading a single VTK. For output with `datetime` as coordinate, specify the path, sliceType, and t (see docstrings for example)')
-                x, y, z, out = readSingleVTK(vtkpath, res=res, squash=squash)
+                x, y, z, out = readSingleVTK(vtkpath, res=res, squash=squash, ang=ang)
                 ds = VTK2xarray(x, y, z, out)
                 return ds
             else:
@@ -120,9 +122,12 @@ def readVTK(vtkpath, sliceType=None, dateref=None, ti=None, tf=None, t=None, res
             raise ValueError("You have to specify at least one time. If a single VTK is needed, use " \
                              "vtkpath='path/to/file.vtk' ")
 
-    # Get the time directories
-    times_str = sorted(os.listdir(vtkpath))
+    # Get the time directories. We can't just sort straight up because of 1, 10, 100 gets ordered differently.
+    times_str = os.listdir(vtkpath)
     times_float = [float(i) for i in times_str]
+    sortInd =  np.argsort(times_float)
+    times_float = np.sort(times_float)
+    times_str = np.array(times_str)[sortInd]
 
     if t is not None:
         # Single time was requested
@@ -133,7 +138,7 @@ def readVTK(vtkpath, sliceType=None, dateref=None, ti=None, tf=None, t=None, res
             raise ValueError(f'No VTK found for time {t}. The last available VTK is at t={times_float[-1]}')
         t = times_str[pos_t]
         print(f'Reading a single VTK for time {float(t)}')
-        x, y, z, out = readSingleVTK(os.path.join(vtkpath,t,sliceType), res=res, squash=squash)
+        x, y, z, out = readSingleVTK(os.path.join(vtkpath,t,sliceType), res=res, squash=squash, ang=ang)
         ds = VTK2xarray(x, y, z, out, t, dateref)
         return ds
 
@@ -151,7 +156,7 @@ def readVTK(vtkpath, sliceType=None, dateref=None, ti=None, tf=None, t=None, res
     dslist = []
     for i, t in enumerate(times_str[pos_ti:pos_tf]):
         print(f'Iteration {i}: processing time {t}...  {100*i/nvtk:.2f}%', end='\r', flush=True)
-        x, y, z, out = readSingleVTK(os.path.join(vtkpath,t,sliceType), res=res, squash=squash)
+        x, y, z, out = readSingleVTK(os.path.join(vtkpath,t,sliceType), res=res, squash=squash, ang=ang)
         current_ds = VTK2xarray(x, y, z, out, t, dateref)
         dslist.append(current_ds)
 
@@ -232,8 +237,7 @@ def VTK2xarray(x, y, z, out, t=None, dateref=None):
     return ds
 
 
-
-def readSingleVTK(vtkfullpath, res=None, squash=None):
+def readSingleVTK(vtkfullpath, res=None, squash=None, ang=None):
     """
     Read a single VTK file and interpolates into a uniform grid based on the limits read from the VTK
 
@@ -251,6 +255,11 @@ def readSingleVTK(vtkfullpath, res=None, squash=None):
         resolution of interpolated grid. If tuple, resolution in x, y, and z, in order
     squash: str, 'x', 'y', or 'z' only
         Squash the VTK into a plane (useful for terrain slices)
+    ang: scalar
+        Angle for inclined slices. Currently only supports slices rotated in the z-plane
+        E.g. for SE 160 deg winds, a cross-wind slice will have ang=20, along-wind ang=90+20
+        In practice, give a few attemps adding/subtracting 90 degrees with a single slice 
+        comparing with the paraview slice.
 
     Returns:
     --------
@@ -277,16 +286,33 @@ def readSingleVTK(vtkfullpath, res=None, squash=None):
 
     # Load data
     polydata = dsa.WrapDataObject(reader.GetOutput())
-    ptdata   = polydata.GetPointData()
     coords   = np.round(polydata.Points, 4)
-    data     = ptdata.GetArray(0)
+    try:
+        # This will work when POINT_DATA <npoints> is given inside the vtk file
+        ptdata   = polydata.GetPointData()
+        # Get the actual data from the points given by ptdata
+        data     = ptdata.GetArray(idx=0)
+    except IndexError:
+        # We will get into this exception when POINT_DATA doesn't exist
+        # We assume that now we are seeing CELL_DATA <ncells> in the vtk file
+        # Let's convert it to a POINT_DATA vtk and move forward as we would
+
+        # Apply the vtkCellDataToPointData filter
+        cellToPoint = vtk.vtkCellDataToPointData()
+        cellToPoint.SetInputData(reader.GetOutput())
+        cellToPoint.Update()
+
+        polydata = dsa.WrapDataObject(cellToPoint.GetOutput())
+        coords   = np.round(polydata.Points, 4)
+        ptdata   = polydata.GetPointData()
+        data     = ptdata.GetArray(idx=0)
+
 
     # Determine what plane the VTK is in
     if squash == None:
-        # Full 3-D field
+        # Full 3-D field; or angle given for inclined slice
         dir1=0; dir2=1;
         dirconst=2
-        print('Reading full 3D VTK. It might take a while. If you are reading planes of data, use `squash`.')
     elif squash=='x':
         dirconst = 0
         dir1=1;  dir2=2
@@ -329,9 +355,55 @@ def readSingleVTK(vtkfullpath, res=None, squash=None):
         # Squash the data into the requested plane
         coords[:,dirconst] = zlevel
 
+    elif ang is not None:
+        # Angled slice with angle given
+                
+        # Rotate the slice.
+        xref = np.max(coords[:,0])/2
+        yref = np.max(coords[:,1])/2
+        coordsref = coords
+        coordsref[:,0] -= xref
+        coordsref[:,1] -= yref
+        
+        c = np.cos(np.deg2rad(ang))
+        s = np.sin(np.deg2rad(ang))
+        rot = [[c, -s, 0],
+               [s, c,  0],
+               [0,  0, 1]]
+        coords_rot = np.dot(coordsref, rot)
+
+        
+        # After rotation, the plane of intered is in y=0
+        dirconst = 1
+        dir1=0;  dir2=2
+        
+        # Set level and tolerance for points to be within that plane
+        zlevel=0
+        tol = 0.004
+        
+        # Here we do not squash the data, but rather pick the ones that lie on the plane.
+        mask = (coords_rot[:, dirconst] >= zlevel-tol) & (coords_rot[:, dirconst] <= zlevel+tol)
+        coords = coords_rot[mask]
+        data   = data[mask]
+        
+        # Let's make all the points within the tolerance bands exact
+        coords[:,dirconst] = zlevel
+
+        # Shift back so that the corner point is at the same location
+        xref = np.min(coords[:,dir1])
+        coords[:,dir1] -= xref
+        
+        # Finally, we get the limits in the two main directions
+        [xminbox, yminbox] = np.min(coords, 0)[[dir1, dir2]]
+        [xmaxbox, ymaxbox] = np.max(coords, 0)[[dir1, dir2]]
+
+
     else:
+        # Full 3-D field
+        print('Reading full 3D VTK. It might take a while. If you are reading planes of data, use `squash`.')
         [xminbox, yminbox, zminbox] = np.min(coords, 0)[[dir1, dir2, dirconst]]
         [xmaxbox, ymaxbox, zmaxbox] = np.max(coords, 0)[[dir1, dir2, dirconst]]
+
 
 
 
@@ -349,7 +421,7 @@ def readSingleVTK(vtkfullpath, res=None, squash=None):
     # Create the desired output grid
     x1d = np.arange(xminbox,xmaxbox+dx,dx)
     y1d = np.arange(yminbox,ymaxbox+dy,dy)
-    if squash in ['x','y','z']:
+    if squash in ['x','y','z'] or ang is not None:
         z1d = np.asarray([zlevel])    
     else:
         z1d = np.arange(zminbox, zmaxbox+dz, dz)

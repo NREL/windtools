@@ -238,7 +238,11 @@ class ProbeSets(Reader):
         #          gets 'vmast_50_T.xy' and returns 'vmast_50_p_rgh_T.xy' and pos=2
 
         # Get filename that has `param` and `var` in it
-        fname = os.path.basename(glob.glob(os.path.join(dpath,'*'+param+'_*'+var+'*'))[0])
+        try:
+            fname = os.path.basename(glob.glob(os.path.join(dpath,'*'+param+'_*'+var+'*'))[0])
+        except IndexError:
+            print(f'File with parameter {param} does not appear to exist.')
+            raise
 
         # Get all the variables present in the current file. E.g.: ['T'], ['T','prgh']
         varsInFname = fname.replace(self.fprefix,'').replace(param+'_','').replace(self.fsuffix,'') \
@@ -294,7 +298,13 @@ class ProbeSets(Reader):
     def _read_probe_posAndData(self,f):
         out = []
         # Pandas is a LOT faster than reading the file line by line
-        out = pd.read_csv(f.name,header=None,comment='#',sep='\t')
+        try:
+            out = pd.read_csv(f.name,header=None,comment='#',sep='\t')
+        except pd.errors.EmptyDataError:
+            print(f'EmptyDataError from pandas on {f.name}')
+            print(f'Maybe the directory names are not round numbers?')
+            print(f'If they are more than 12 digits long, clippings between str and float will occur')
+            raise
         # Add position perturbation to x, y, zabs
         out[[0,1,2]] = out[[0,1,2]].add(self.posPert)
         # clip spatial data
