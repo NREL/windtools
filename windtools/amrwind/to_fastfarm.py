@@ -6,7 +6,7 @@ from mpi4py import MPI
 import windtools.amrwind.post_processing as pp
 
 
-def dristribute_nodes(
+def distribute_nodes(
     file_path, output_path, group_name, i_start, i_end, vtkstartind=0
 ):
     """
@@ -39,7 +39,6 @@ def dristribute_nodes(
     >>> file_path = '../sampling_lr96000.nc'
     >>> output_path = 'output'
     >>> group_name = 'Low'
-    >>> numcores = 36
     >>> shiftind=0
     >>> i_start = 0
     >>> i_end = 7500
@@ -63,12 +62,12 @@ def dristribute_nodes(
     start_index = i_start + rank * workpernode + min(rank, remainder)
     end_index = start_index + workpernode + (rank < remainder)
     print(f"The current rank is {rank}")
-    disritube_cores(
-        file_path, output_path, group_name, start_index, end_index, vtkstartind=0
+    distribute_cores(
+        file_path, output_path, group_name, start_index, end_index, vtkstartind
     )
 
 
-def disritube_cores(file_path, output_path, group_name, i_start, i_end, vtkstartind=0):
+def distribute_cores(file_path, output_path, group_name, i_start, i_end, vtkstartind=0):
 
     # Find number of cores
     numcores = mp.cpu_count()
@@ -89,10 +88,11 @@ def disritube_cores(file_path, output_path, group_name, i_start, i_end, vtkstart
             ind = (
                 batchi * numcores + corei + i_start
             )  # Index of the VTK file to be written
-            if ind > i_end:  # Don't spawn more processes if last index is reached
+            if ind >= i_end:  # Don't spawn more processes if last index is reached
                 break
 
             # Spawn one process for each index
+            # parfunc(sample, group_name, group_path, ind, ind + 1, vtkstartind)
             p = mp.Process(
                 target=parfunc,
                 args=(sample, group_name, group_path, ind, ind + 1, vtkstartind),
