@@ -352,7 +352,9 @@ class Sampling(object):
         if   (ds.axis3 == [1,0,0]).all(): ordereddims = ['y','z','x','samplingtimestep']
         elif (ds.axis3 == [0,1,0]).all(): ordereddims = ['x','z','y','samplingtimestep']
         elif (ds.axis3 == [0,0,1]).all(): ordereddims = ['x','y','z','samplingtimestep']
-        else: raise ValueError('Unknown normal plane')
+        else:
+            self._read_nonaligned_plane_sampler_xr(ds)
+            ordereddims = ['x','y','z','samplingtimestep']
 
         new_all = xr.DataArray(data = velx_all, 
                        dims = ordereddims,
@@ -389,6 +391,94 @@ class Sampling(object):
                 new_all.to_zarr(os.path.join(outputPath,f'{group}.zarr'))
 
         return new_all
+
+
+    def _read_nonaligned_plane_sampler_xr(self, ds):
+        print(f"")
+        print(f"| ----------------------------- WARNING ----------------------------- |")
+        print(f'|  - Unknown normal plane. Guessing the order of the dimensions       |')
+        print(f'|  - Assuming no offsets                                              |')
+        print(f'|                                                                     |')
+        
+        # No guarantees that the arrays self.{x,y,z} computed before are correct in this case
+        # It is best to reconstruct the arrays based on what we know about the sampling.
+        # The sampling points come a bit wonky; e.g. if we requested 258 points in one dir, 
+        # and 128 on the other (that is, still a plane), we will end up with the arrays x and y
+        # of length 258. Therefore, here we recontruct x and y as being the two principal axis
+        # for the plane based on an estimation of the sampling resolution
+        
+        # Get limits of the slices
+        xmin = ds['coordinates'].isel(ndim=0).min().values
+        xmax = ds['coordinates'].isel(ndim=0).max().values
+        ymin = ds['coordinates'].isel(ndim=1).min().values
+        ymax = ds['coordinates'].isel(ndim=1).max().values
+        zmin = ds['coordinates'].isel(ndim=2).min().values
+        zmax = ds['coordinates'].isel(ndim=2).max().values
+
+        # Let's try to guess which is the second axis. We can identify that by a nice
+        # "round" potential resolution. The extent of each direction is in the var
+        # self.{x,y,z}. E.g. if it's in the z direction, then (zmax-zmin)/(len(z)-1)
+        # would be a nice round number
+        potential_res_x = (xmax-xmin)/(len(self.x)-1)
+        potential_res_y = (ymax-ymin)/(len(self.y)-1)
+        potential_res_z = (zmax-zmin)/(len(self.z)-1)
+        if   potential_res_x.is_integer():
+            print(f"|  - It seems like the slice's second axis is in the x direction      |")
+            potential_res = potential_res_x
+            # Estimate the sampling resolution (assuming second axis is in x direction)
+            axis1_length = ((ymax-ymin)**2 + (zmax-zmin)**2)**0.5
+            axis2_length = ((xmax-xmin)**2)**0.5
+            
+        elif potential_res_y.is_integer():
+            print(f"|  - It seems like the slice's second axis is in the y direction      |")
+            potential_res = potential_res_y
+            # Estimate the sampling resolution (assuming second axis is in y direction)
+            axis1_length = ((xmax-xmin)**2 + (zmax-zmin)**2)**0.5
+            axis2_length = ((ymax-ymin)**2)**0.5
+            
+        elif potential_res_z.is_integer():
+            print(f"|  - It seems like the slice's second axis is in the z direction      |")
+            potential_res = potential_res_z
+            # Estimate the sampling resolution (assuming second axis is in z direction)
+            axis1_length = ((xmax-xmin)**2 + (ymax-ymin)**2)**0.5
+            axis2_length = ((zmax-zmin)**2)**0.5
+        else:
+            print(f"|        UNSURE WHAT DIRECTION IS THE SECOND AXIS OF THIS SLICE       |")
+            print(f"|                     COMPLICATED SLICE. STOPPING                     |")
+            raise ValueError(f'Not sure how to continue with this plane.')
+            
+        # Guess the estimate. Based on the fact that the first axis is the non-normal-aligned one
+        res_guess = axis1_length/self.nx
+        print(f"|  It looks like the sampling resolution is approximately {res_guess:.4f} m   |")
+        
+        # Approximate the guess
+        res_guess = np.round(res_guess)
+        print(f"|  Aproximating it to {res_guess:.1f} m. Is that the resolution you expected?    |")
+        print(f'|                                                                     |')
+        
+        # Since we now have the potential resolution assuming at least the second
+        # axis (axis2) was normal to one plane, let's compare them
+        if res_guess == potential_res:
+            print(f"| - Seems like the guessed resolution is correct and consistent with  |")
+            print(f"|   the resolution from the second axis (normal either x, y, or z)    |")
+        else:
+            print(f"| - Seems like the guessed resolution above is NOT consistent with    |")
+            print(f"|   the resolution from the second axis (normal either x, y, or z),   |")
+            print(f"|   which is {potential_res:.2f} m. PROCEED WITH CAUTION. CHECK DOMAIN AND RESOLUT. |")
+        
+        print(f'|                                                                     |')
+        print(f"|   If these guesses are not accurate, STOP NOW and adjust the code.  |")
+        print(f'|                                                                     |')
+        
+        # Creating the axis arrays (assuming x is first axis, y is second axis)
+        self.x = np.linspace(0,(self.nx-1)*res_guess,self.nx)
+        self.y = np.linspace(0,(self.ny-1)*res_guess,self.ny)
+        self.z = [0]
+        
+        print(f"| ------------------------------------------------------------------- |")
+
+
+
 
 
     def _read_probe_sampler(self,ds):
