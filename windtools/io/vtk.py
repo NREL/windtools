@@ -168,6 +168,16 @@ def readVTK(vtkpath, sliceType=None, dateref=None, ti=None, tf=None, t=None, res
     elif 'datetime' in dslist[0].dims:
         ds = xr.concat(dslist, dim='datetime')
 
+    # Let's give the user a warning in case their angled slices are wrong (that is, `ang` given is not correct)
+    if ang is not None:
+        for coord in ['x','y','z']:
+            if coord in list(ds.coords) and len(ds[coord])<10:
+                print('---- WARNING ----')
+                print('You sampled angled slices. If you get fewer coordinates points than what',
+                      'you were expecting, double check the angle. The angle needs to be exact.')
+                # In this case, the user should go into the dictionary where the slice location is
+                # defined, and re-compute the angle from there. The exact angle should be passed here.
+
     return ds
 
 
