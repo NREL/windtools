@@ -584,6 +584,10 @@ class Sampling(object):
 
 
 def addDatetime(ds,dt,origin=pd.to_datetime('2000-01-01 00:00:00'), computemean=True):
+    '''
+    Add temporal means to dataset. Means are computed for every spatial location
+    separately. That is, no spatial average is used to compute temporal mean. 
+    '''
     
     if dt <= 0:
         raise ValueError(f'The dt should be positive. Received {dt}.')
