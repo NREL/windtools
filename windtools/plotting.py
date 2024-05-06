@@ -13,6 +13,7 @@
 Library of standardized plotting functions for basic plot formats
 
 Written by Dries Allaerts (dries.allaerts@nrel.gov)
+Modified by Regis Thedin (regis.thedin@nrel.gov)
 """
 
 import numpy as np
@@ -23,6 +24,10 @@ import pandas as pd
 import xarray as xr
 from scipy.interpolate import interp1d
 from scipy.signal import welch
+
+import os, sys
+sys.path.append(os.path.abspath('/home/rthedin/utilities/'))
+from helper import addLabels
 
 # Standard field labels
 # - default: e.g., "Km/s"
@@ -53,6 +58,14 @@ fieldlabels_default_units = {
     'TI': r'TI $[-]$',
     'TI_TKE': r'TI (TKE) $[-]$',
     'TKE': r'TKE $[\mathrm{m^2/s^2}]$',
+    #
+    'calculated_u*': r'$u_* =  \left( \langle u^\prime w^\prime \rangle^2 + \langle v^\prime w^\prime \rangle^2 \right)^{1/4} \;[\mathrm{m/s}]$',
+    'ustar' : r'LES $u_*\; [\mathrm{m/s}]$',
+    'sigma_u/calc_u*': r'$\sigma_u/u_*$',
+    'sigma_v/calc_u*': r'$\sigma_v/u_*$',
+    'sigma_w/calc_u*': r'$\sigma_w/u_*$',
+    'sigma_v/sigma_u': r'$\sigma_v/\sigma_u$',
+    'sigma_w/sigma_u': r'$\sigma_w/\sigma_u$',
 }
 fieldlabels_superscript_units = {
     'wspd': r'Wind speed [m s$^{-1}$]',
@@ -340,12 +353,16 @@ def plot_timeheight(datasets,
     
     # Number sub figures as a, b, c, ...
     if labelsubplots is not False:
-        try:
-            hoffset, voffset = labelsubplots
-        except (TypeError, ValueError):
-            hoffset, voffset = -0.14, 1.0
-        for i,axi in enumerate(axv):
-            axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
+        addLabels(axv)
+
+        # 2023-09-25: commenting this out and using my implementation
+        # of labeling subplots (above)
+        #try:
+        #    hoffset, voffset = labelsubplots
+        #except (TypeError, ValueError):
+        #    hoffset, voffset = -0.14, 1.0
+        #for i,axi in enumerate(axv):
+        #    axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
 
     # Return cbar instead of array if ntotal==1
     if len(cbars)==1:
@@ -650,12 +667,16 @@ def plot_timehistory_at_height(datasets,
 
     # Number sub figures as a, b, c, ...
     if labelsubplots is not False:
-        try:
-            hoffset, voffset = labelsubplots
-        except (TypeError, ValueError):
-            hoffset, voffset = -0.14, 1.0
-        for i,axi in enumerate(axv):
-            axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
+        addLabels(axv)
+
+        # 2023-09-25: commenting this out and using my implementation
+        # of labeling subplots (above)
+        #try:
+        #    hoffset, voffset = labelsubplots
+        #except (TypeError, ValueError):
+        #    hoffset, voffset = -0.14, 1.0
+        #for i,axi in enumerate(axv):
+        #    axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
 
     # Add legend
     if showlegend:
@@ -978,12 +999,16 @@ def plot_profile(datasets,
     
     # Number sub figures as a, b, c, ...
     if labelsubplots is not False:
-        try:
-            hoffset, voffset = labelsubplots
-        except (TypeError, ValueError):
-            hoffset, voffset = -0.14, -0.18
-        for i,axi in enumerate(axv):
-            axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
+        addLabels(axv)
+
+        # 2023-09-25: commenting this out and using my implementation
+        # of labeling subplots (above)
+        #try:
+        #    hoffset, voffset = labelsubplots
+        #except (TypeError, ValueError):
+        #    hoffset, voffset = -0.14, -0.18
+        #for i,axi in enumerate(axv):
+        #    axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
     
     # Add legend
     if showlegend:
