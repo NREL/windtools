@@ -59,7 +59,7 @@ fieldlabels_default_units = {
     'TI_TKE': r'TI (TKE) $[-]$',
     'TKE': r'TKE $[\mathrm{m^2/s^2}]$',
     #
-    'calculated_u*': r'$u_* =  \left( \langle u^\prime v^\prime \rangle^2 + \langle u^\prime w^\prime \rangle^2 \right)^{1/4} \;[\mathrm{m/s}]$',
+    'calculated_u*': r'$u_* =  \left( \langle u^\prime w^\prime \rangle^2 + \langle v^\prime w^\prime \rangle^2 \right)^{1/4} \;[\mathrm{m/s}]$',
     'ustar' : r'LES $u_*\; [\mathrm{m/s}]$',
     'sigma_u/calc_u*': r'$\sigma_u/u_*$',
     'sigma_v/calc_u*': r'$\sigma_v/u_*$',
