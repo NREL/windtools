@@ -319,12 +319,15 @@ class Sampling(object):
             new_all['tke'] = (ordereddims, tke_all)
 
         if outputPath is not None:
-            if outputPath.endswith('.zarr'):
+            if outputPath.endswith('.nc'):
+                print(f'Saving {outputPath}')
+                new_all.to_netcdf(outputPath)
+            elif outputPath.endswith('.zarr'):
                 print(f'Saving {outputPath}')
                 new_all.to_zarr(outputPath)
             else:
-                print(f'Saving {group}.zarr')
-                new_all.to_zarr(os.path.join(outputPath,f'{group}.zarr'))
+                print(f'Saving {group}.nc')
+                new_all.to_netcdf(os.path.join(outputPath,f'{group}.nc'))
 
         return new_all
 
@@ -383,12 +386,12 @@ class Sampling(object):
             if outputPath.endswith('.zarr'):
                 print(f'Saving {outputPath}')
                 new_all.to_zarr(outputPath)
-            elif outputPath.endswith('.nc.'):
+            elif outputPath.endswith('.nc'):
                 print(f'Saving {outputPath}')
                 new_all.to_netcdf(outputPath)
             else:
-                print(f'Saving {group}.zarr')
-                new_all.to_zarr(os.path.join(outputPath,f'{group}.zarr'))
+                print(f'Saving {group}.nc')
+                new_all.to_netcdf(os.path.join(outputPath,f'{group}.nc'))
 
         return new_all
 
