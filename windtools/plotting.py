@@ -66,6 +66,7 @@ fieldlabels_default_units = {
     'sigma_w/calc_u*': r'$\sigma_w/u_*$',
     'sigma_v/sigma_u': r'$\sigma_v/\sigma_u$',
     'sigma_w/sigma_u': r'$\sigma_w/\sigma_u$',
+    'Phi_m': r'$\Phi_m = \kappa z/u_* \frac{\partial U}{\partial z}$',
 }
 fieldlabels_superscript_units = {
     'wspd': r'Wind speed [m s$^{-1}$]',
