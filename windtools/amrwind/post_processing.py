@@ -9,6 +9,12 @@ from netCDF4 import Dataset
 class ABLStatistics(object):
 
     def __init__(self,fpath,start_date=None,mean_profiles=False):
+        """Load planar averaged ABL statistics into an underlying xarray
+        dataset for analysis. By default, only surface time histories
+        are loaded; setting `mean_profiles=True` will also load
+        time--height data from the "mean_profiles" group within the
+        dataset.
+        """
         self.fpath = fpath
         if start_date:
             self.datetime0 = pd.to_datetime(start_date)
