@@ -24,6 +24,7 @@ class ABLStatistics(object):
         if mean_profiles:
             self._load_timeheight_profiles()
             self._calc_total_fluxes()
+            self._calc_TI()
         self.t = self.ds.coords['time']
         self.z = self.ds.coords['height']
 
@@ -63,6 +64,13 @@ class ABLStatistics(object):
                 if varn_sfs in self.ds.data_vars:
                     varn_tot = varn[:-2] + '_tot'
                     self.ds[varn_tot] = self.ds[varn] + self.ds[varn_sfs]
+
+    def _calc_TI(self):
+        ang = np.arctan2(self.ds['v'], self.ds['u'])
+        rotatedvar = self.ds["u'u'_r"] * np.cos(ang)**2 \
+                   + self.ds["u'v'_r"] * 2*np.sin(ang)*np.cos(ang) \
+                   + self.ds["v'v'_r"] * np.sin(ang)**2
+        self.ds['TI'] = np.sqrt(rotatedvar) / self.ds['hvelmag']
 
     def rolling_mean(self,Tavg=3600.):
         dt = float(self.t[1] - self.t[0])
@@ -659,10 +667,3 @@ def addDatetime(ds,dt,origin=pd.to_datetime('2000-01-01 00:00:00'), computemean=
         ds['wp'] = ds['w'] - meanw
 
     return ds
-
-
-
-
-
-
-
