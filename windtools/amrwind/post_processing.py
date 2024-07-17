@@ -23,6 +23,8 @@ class ABLStatistics(object):
         self._load_timeseries()
         if mean_profiles:
             self._load_timeheight_profiles()
+        self.t = self.ds.coords['time']
+        self.z = self.ds.coords['height']
 
     def _setup_time_coords(self,ds):
         if self.datetime0:
@@ -53,8 +55,12 @@ class ABLStatistics(object):
         self.ds = xr.combine_by_coords([self.ds, ds])
         self.ds[self.time_coord] = np.round(self.ds[self.time_coord],5)
 
-
-
+    def rolling_mean(self,Tavg=3600.):
+        dt = float(self.t[1] - self.t[0])
+        assert np.all(np.diff(self.t) == dt), 'Output time interval is variable'
+        Navg = int(Tavg / dt)
+        assert Navg > 0
+        return self.ds.rolling(time=Navg).mean()
 
 
 class Sampling(object):
