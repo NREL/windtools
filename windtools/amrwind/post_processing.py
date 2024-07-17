@@ -23,6 +23,7 @@ class ABLStatistics(object):
         self._load_timeseries()
         if mean_profiles:
             self._load_timeheight_profiles()
+            self._calc_total_fluxes()
         self.t = self.ds.coords['time']
         self.z = self.ds.coords['height']
 
@@ -54,6 +55,14 @@ class ABLStatistics(object):
         ds = ds.transpose(self.time_coord,'height')
         self.ds = xr.combine_by_coords([self.ds, ds])
         self.ds[self.time_coord] = np.round(self.ds[self.time_coord],5)
+
+    def _calc_total_fluxes(self):
+        for varn in self.ds.data_vars:
+            if varn.endswith('_r'):
+                varn_sfs = varn[:-2] + '_sfs'
+                if varn_sfs in self.ds.data_vars:
+                    varn_tot = varn[:-2] + '_tot'
+                    self.ds[varn_tot] = self.ds[varn] + self.ds[varn_sfs]
 
     def rolling_mean(self,Tavg=3600.):
         dt = float(self.t[1] - self.t[0])
