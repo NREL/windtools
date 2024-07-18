@@ -94,6 +94,9 @@ class ABLStatistics(object):
                    + self.ds["v'v'_r"] * np.sin(ang)**2
         self.ds['TI'] = np.sqrt(rotatedvar) / self.ds['hvelmag']
 
+    def __getitem__(self,key):
+        return self.ds[key]
+
     def rolling_mean(self,Tavg=3600.):
         dt = float(self.t[1] - self.t[0])
         assert np.all(np.diff(self.t) == dt), 'Output time interval is variable'
