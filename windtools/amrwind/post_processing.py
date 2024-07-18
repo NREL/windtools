@@ -21,11 +21,11 @@ class ABLStatistics(object):
         else:
             self.datetime0 = None
         self._load_timeseries(mean_profiles)
+        self.t = self.ds.coords['time']
         if mean_profiles:
+            self.z = self.ds.coords['height']
             self._calc_total_fluxes()
             self._calc_TI()
-        self.t = self.ds.coords['time']
-        self.z = self.ds.coords['height']
 
     def _check_fpaths(self,fpath):
         assert isinstance(fpath, (str,list,tuple))
