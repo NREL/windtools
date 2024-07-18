@@ -15,18 +15,25 @@ class ABLStatistics(object):
         time--height data from the "mean_profiles" group within the
         dataset.
         """
-        self.fpath = fpath
+        self._check_fpaths(fpath)
         if start_date:
             self.datetime0 = pd.to_datetime(start_date)
         else:
             self.datetime0 = None
-        self._load_timeseries()
+        self._load_timeseries(mean_profiles)
         if mean_profiles:
-            self._load_timeheight_profiles()
             self._calc_total_fluxes()
             self._calc_TI()
         self.t = self.ds.coords['time']
         self.z = self.ds.coords['height']
+
+    def _check_fpaths(self,fpath):
+        assert isinstance(fpath, (str,list,tuple))
+        if isinstance(fpath, str):
+            fpath = [fpath]
+        self.fpaths = fpath
+        for fpath in self.fpaths:
+            assert os.path.isfile(fpath), f'{fpath} not found'
 
     def _setup_time_coords(self,ds):
         if self.datetime0:
@@ -39,23 +46,38 @@ class ABLStatistics(object):
             self.time_coord = 'time'
         return ds
 
-    def _load_timeseries(self):
-        ds = xr.load_dataset(self.fpath)
-        ds = self._setup_time_coords(ds)
-        self.ds = ds
+    def _load_timeseries(self,load_mean_profiles=False):
+        dslist = []
+        for fpath in self.fpaths:
 
-    def _load_timeheight_profiles(self):
-        ds = xr.load_dataset(self.fpath, group='mean_profiles')
-        ds = ds.rename({'h':'height'})
-        times = self.ds.coords[self.time_coord].values
-        ds = ds.assign_coords({
-            self.time_coord: ('num_time_steps',times),
-            'height': ds['height'],
-        })
-        ds = ds.swap_dims({'num_time_steps':self.time_coord, 'nlevels':'height'})
-        ds = ds.transpose(self.time_coord,'height')
-        self.ds = xr.combine_by_coords([self.ds, ds])
-        self.ds[self.time_coord] = np.round(self.ds[self.time_coord],5)
+            ds = xr.load_dataset(fpath)
+            ds = self._setup_time_coords(ds)
+
+            if load_mean_profiles:
+                pro = xr.load_dataset(fpath, group='mean_profiles')
+                pro = pro.rename({'h':'height'})
+                pro = pro.assign_coords({
+                    self.time_coord: ('num_time_steps',
+                                      ds.coords[self.time_coord].values),
+                    'height': pro['height'],
+                })
+                pro = pro.swap_dims({'num_time_steps':self.time_coord,
+                                     'nlevels':'height'})
+                # make sure underlying array data have the expected shape
+                pro = pro.transpose(self.time_coord,'height')
+                # merge time-height profiles with timeseries
+                ds = xr.combine_by_coords([ds, pro])
+
+            dslist.append(ds)
+
+        if len(dslist) > 1:
+            for ds,fpath in zip(dslist,self.fpaths):
+                # conflicting attrs causes a merge error
+                print('Merging', fpath, ds.attrs.pop('created_on').rstrip())
+            # concat and merge
+            self.ds = xr.combine_by_coords(dslist)
+        else:
+            self.ds = dslist[0]
 
     def _calc_total_fluxes(self):
         for varn in self.ds.data_vars:
