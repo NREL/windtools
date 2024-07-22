@@ -1235,6 +1235,50 @@ def plot_spectrum(datasets,
 #
 # ---------------------------------------------
 
+def addLabels(axs,loc='upper right', fontsize=14, alpha=0.6, pad=6, start='a'):
+    '''
+    Adds label to subfigures.
+
+    Inputs
+    ------
+    axs: axis object
+        Axis to apply the label on. Can be of any shape and dimension
+    loc: str
+        Location of the labels
+    fontsize: scalar
+        Font size
+    alpha: scalar
+        Alpha value
+    pad: int
+        Distance from corner for label. pad=0 is label touching the corner of the plot
+    start: char
+        Character in which to start labeling the subplots
+    '''
+
+    # Ensure axs is iterable
+    axs = np.array(axs)
+    
+    if   loc == 'upper right':  xy=(1,1); xytext=(-pad,-pad); xloc, yloc = 0.97, 0.97;  ha='right'; va='top'
+    elif loc == 'upper left' :  xy=(0,1); xytext=( pad,-pad); xloc, yloc = 0.03, 0.97;  ha='left';  va='top'
+    elif loc == 'lower right':  xy=(1,0); xytext=(-pad, pad); xloc, yloc = 0.97, 0.03;  ha='right'; va='bottom'
+    elif loc == 'lower left' :  xy=(0,0); xytext=( pad, pad); xloc, yloc = 0.03, 0.03;  ha='left';  va='bottom'
+    else:
+        raise ValueError('loc not recognized. Stopping.')
+    
+    labels = list(map(chr, range(ord(start), 123)))
+    if len(axs.flatten()) > len(labels):
+        # More than a--z, so create 1a, 1b, 1c, 2a, etc. First find the number of numbers number of letters
+        nN = np.shape(axs)[0]
+        nL = np.shape(axs)[1]
+        labels = [str(number) + chr(ord('a') + iletter) for number in range(1, nN + 1) for iletter in range(nL)]
+
+    props = dict(facecolor='white', alpha=alpha, edgecolor='silver', boxstyle='square', pad=0.15)
+    
+    for i, ax in enumerate(axs.flatten()):
+        ax.annotate(f'$({labels[i]})$', xy=xy, color='black', ha=ha, va=va, xycoords='axes fraction',
+                    xytext=xytext, textcoords='offset points', fontsize=fontsize, bbox=props)
+
+
 class InputError(Exception):
     """Exception raised for errors in the input.
 
