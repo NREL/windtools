@@ -26,8 +26,6 @@ from scipy.interpolate import interp1d
 from scipy.signal import welch
 
 import os, sys
-sys.path.append(os.path.abspath('/home/rthedin/utilities/'))
-from helper import addLabels
 
 # Standard field labels
 # - default: e.g., "Km/s"
