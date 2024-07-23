@@ -8,12 +8,19 @@ from netCDF4 import Dataset
 
 class ABLStatistics(object):
 
-    def __init__(self,fpath,start_date=None,mean_profiles=False):
+    def __init__(self,fpath,start_date=None,mean_profiles=False,
+                 calc_TI=False,calc_TI_TKE=False):
         """Load planar averaged ABL statistics into an underlying xarray
         dataset for analysis. By default, only surface time histories
         are loaded; setting `mean_profiles=True` will also load
         time--height data from the "mean_profiles" group within the
         dataset.
+
+        Turbulence intensities can be estimated with the `calc_TI` or
+        `calc_TI_TKE` parameters. The former is based on horizontal
+        variances only (<u'u'>, <u'v'>, and <v'v'>) and accounts for
+        flow directionality, whereas the latter is based on an average
+        of three velocity variances (<u'u'>, <v'v'>, and <w'w'>).
         """
         self._check_fpaths(fpath)
         if start_date:
@@ -25,7 +32,8 @@ class ABLStatistics(object):
         if mean_profiles:
             self.z = self.ds.coords['height']
             self._calc_total_fluxes()
-            self._calc_TI()
+            if calc_TI: self._calc_TI()
+            if calc_TI_TKE: self._calc_TI_TKE()
 
     def _check_fpaths(self,fpath):
         assert isinstance(fpath, (str,list,tuple))
@@ -94,10 +102,17 @@ class ABLStatistics(object):
                    + self.ds["v'v'_r"] * np.sin(ang)**2
         self.ds['TI'] = np.sqrt(rotatedvar) / self.ds['hvelmag']
 
+    def _calc_TI_TKE(self):
+        meanvar = (self.ds["u'u'_r"] + self.ds["v'v'_r"] + self.ds["w'w'_r"]) / 3
+        self.ds['TI_TKE'] = np.sqrt(meanvar) / self.ds['hvelmag']
+
     def __getitem__(self,key):
         return self.ds[key]
 
-    def rolling_mean(self,Tavg=3600.):
+    def rolling_mean(self,Tavg):
+        """Calculate a rolling mean assuming a fixed time-step size.
+        The rolling window size Tavg is given in seconds.
+        """
         dt = float(self.t[1] - self.t[0])
         assert np.all(np.diff(self.t) == dt), 'Output time interval is variable'
         Navg = int(Tavg / dt)
