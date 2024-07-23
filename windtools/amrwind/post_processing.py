@@ -224,7 +224,7 @@ class Sampling(object):
 
         return ds_all
 
-    def read_single_group(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['u','v','w'], simCompleted=False, verbose=False, package='xr'):
+    def read_single_group(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz'], simCompleted=False, verbose=False, package='xr'):
 
         if package == 'xr':
             print(f'Reading single group using xarray. This will take longer and require more RAM')
@@ -240,7 +240,7 @@ class Sampling(object):
 
 
 
-    def read_single_group_h5py(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['u','v','w'], simCompleted=False, verbose=False):
+    def read_single_group_h5py(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz'], simCompleted=False, verbose=False):
         '''
 
         step: int
@@ -252,7 +252,7 @@ class Sampling(object):
             files will be saved.
         var: str, list of str
             variables to be outputted. By defaul, u, v, w. If temperature and tke are available,
-            use either var='all' or var=['u','v','w','tke'], for example.
+            use either var='all' or var=['velocityx','velocityy','velocityz','tke'], for example.
         simCompleted: bool, default False
             If the simulation is still running, the nc file needs to be open using `load_dataset`. 
             This function does _not_ load the data lazily, so it is prohibitively expensive to use
@@ -274,7 +274,7 @@ class Sampling(object):
 
         if isinstance(var,str): var = [var]
         if var==['all']:
-            self.reqvars = ['u','v','w','temperature','tke']
+            self.reqvars = ['velocityx','velocityy','velocityz','temperature','tke']
         else:
             self.reqvars = var
 
@@ -296,7 +296,7 @@ class Sampling(object):
 
 
 
-    def read_single_group_xr(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['u','v','w'], simCompleted=False, verbose=False):
+    def read_single_group_xr(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz'], simCompleted=False, verbose=False):
         
         if simCompleted:
             dsraw = xr.open_dataset(self.fpath, group=group, engine='netcdf4')
@@ -306,7 +306,7 @@ class Sampling(object):
 
         if isinstance(var,str): var = [var]
         if var==['all']:
-            self.reqvars = ['u','v','w','temperature','tke']
+            self.reqvars = ['velocityx','velocityy','velocityz','temperature','tke']
         else:
             self.reqvars = var
 
@@ -419,6 +419,8 @@ class Sampling(object):
         if ftime == -1:
             ftime = self.ndt
 
+        # Get velocity info (regardless if asked for)
+
         # Unformatted arrays
         velx_old_all = ds['velocityx'].isel(num_time_steps=slice(itime, ftime, step)).values
         vely_old_all = ds['velocityy'].isel(num_time_steps=slice(itime, ftime, step)).values
@@ -452,15 +454,36 @@ class Sampling(object):
         new_all['v'] = (ordereddims, vely_all)
         new_all['w'] = (ordereddims, velz_all)
 
-        if 'temperature' in list(ds.keys()) and 'temperature' in self.reqvars:
-            temp_old_all = ds['temperature'].isel(num_time_steps=slice(itime, ftime, step)).values
-            temp_all = np.reshape(temp_old_all, (ndt, self.nz, self.ny, self.nx)).T
-            new_all['temperature'] = (ordereddims, temp_all)
 
-        if 'tke' in list(ds.keys()) and 'tke' in self.reqvars:
-            tke_old_all = ds['tke'].isel(num_time_steps=slice(itime, ftime, step)).values
-            tke_all = np.reshape(tke_old_all, (ndt, self.nz, self.ny, self.nx)).T
-            new_all['tke'] = (ordereddims, tke_all)
+
+
+
+        print(f'The following variables are available in this dataset: {list(ds.keys())}')
+
+        for curr_var in set(self.reqvars) - {'velocityx', 'velocityy', 'velocityz'}:
+            if curr_var not in list(ds.keys()):
+                print(f'Variable {curr_var} not available. Skipping it. Available variables: {list(ds.keys())}')
+                continue
+
+            temp_old_all = ds[curr_var].isel(num_time_steps=slice(itime, ftime, step)).values
+            temp_all = np.reshape(temp_old_all, (ndt, self.nz, self.ny, self.nx)).T
+            new_all[curr_var] = (ordereddims, temp_all)
+
+
+        #if 'actuator_src_termx' in list(ds.keys()) and 'actuator_src_termx' in self.reqvars:
+        #    temp_old_all = ds['actuator_src_termx'].isel(num_time_steps=slice(itime, ftime, step)).values
+        #    temp_all = np.reshape(temp_old_all, (ndt, self.nz, self.ny, self.nx)).T
+        #    new_all['actuator_src_termx'] = (ordereddims, temp_all)
+
+        #if 'temperature' in list(ds.keys()) and 'temperature' in self.reqvars:
+        #    temp_old_all = ds['temperature'].isel(num_time_steps=slice(itime, ftime, step)).values
+        #    temp_all = np.reshape(temp_old_all, (ndt, self.nz, self.ny, self.nx)).T
+        #    new_all['temperature'] = (ordereddims, temp_all)
+
+        #if 'tke' in list(ds.keys()) and 'tke' in self.reqvars:
+        #    tke_old_all = ds['tke'].isel(num_time_steps=slice(itime, ftime, step)).values
+        #    tke_all = np.reshape(tke_old_all, (ndt, self.nz, self.ny, self.nx)).T
+        #    new_all['tke'] = (ordereddims, tke_all)
 
         if outputPath is not None:
             if outputPath.endswith('.zarr'):
@@ -569,7 +592,7 @@ class Sampling(object):
 
 
 
-    def to_vtk(self, dsOrGroup, outputPath, verbose=True, offsetz=0, itime_i=0, itime_f=-1, t0=None, dt=None, vtkstartind=0):
+    def to_vtk(self, dsOrGroup, outputPath, verbose=True, offsetz=0, itime_i=0, itime_f=-1, t0=None, dt=None, vtkstartind=0, terrain=False):
         '''
         Writes VTKs for all time stamps present in ds
 
@@ -597,10 +620,19 @@ class Sampling(object):
             Index by which the names of the vtk files will be shifted. This is useful for saving files
             starting from a non-zero time-step when AMR-Wind crashes unxpectedly and is restarted using
             a savefile.
+        terrain: bool
+            Whether or not put NaNs where the terrain is. For this option to be enabled, the dataset
+            should also contain a variable called `terrainBlank` taking the value of 1 when it's terrain
+            and 0 when it's not. This variable will dictate the velocity values that will become NaNs.
 
         '''
         if not os.path.exists(outputPath):
             raise ValueError(f'The output path should exist. Stopping.')
+
+        if terrain:
+            var = ['velocityx','velocityy','velocityz','terrainBlank']
+        else:
+            var = ['velocityx','velocityy','velocityz']
 
         if isinstance(dsOrGroup,xr.Dataset):
             ds = dsOrGroup
@@ -611,15 +643,17 @@ class Sampling(object):
         else:
             if verbose: print(f'    Reading group {dsOrGroup}, from sampling time step {itime_i} to {itime_f}...', flush=True)
             ds = self.read_single_group(dsOrGroup, itime=itime_i, ftime=itime_f, outputPath=None,
-                                        simCompleted=True, verbose=verbose)
+                                        simCompleted=True, verbose=verbose, var=var)
             if verbose: print(f'    Done reading group {dsOrGroup}, from sampling time steps above.', flush=True)
             ndt = len(ds.samplingtimestep)  # rt mar13: I had ds.num_time_steps here, but it kept crashing 
-            #xarray = self.x
-            #yarray = self.y
-            #zarray = self.z
             xarray = ds.x
             yarray = ds.y
             zarray = ds.z
+
+        if terrain:
+            ds['u'] = ds['u'].where(ds['terrainBlank'] == 0, np.nan)
+            ds['v'] = ds['v'].where(ds['terrainBlank'] == 0, np.nan)
+            ds['w'] = ds['w'].where(ds['terrainBlank'] == 0, np.nan)
 
         if t0 is None and dt is None:
             timegiven=False
@@ -677,6 +711,7 @@ class Sampling(object):
                 # Write the reshaped numpy array to the file
                 np.savetxt(vtk,np.stack((uval,vval,wval)).transpose(),fmt='%.5f',delimiter='\t',newline='\n',encoding='utf-8')
 
+        return ds
 
 def addDatetime(ds,dt,origin=pd.to_datetime('2000-01-01 00:00:00'), computemean=True):
     '''

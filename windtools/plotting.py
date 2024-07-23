@@ -26,8 +26,6 @@ from scipy.interpolate import interp1d
 from scipy.signal import welch
 
 import os, sys
-sys.path.append(os.path.abspath('/home/rthedin/utilities/'))
-from helper import addLabels
 
 # Standard field labels
 # - default: e.g., "Km/s"
@@ -66,6 +64,7 @@ fieldlabels_default_units = {
     'sigma_w/calc_u*': r'$\sigma_w/u_*$',
     'sigma_v/sigma_u': r'$\sigma_v/\sigma_u$',
     'sigma_w/sigma_u': r'$\sigma_w/\sigma_u$',
+    'Phi_m': r'$\Phi_m = \kappa z/u_* \frac{\partial U}{\partial z}$',
 }
 fieldlabels_superscript_units = {
     'wspd': r'Wind speed [m s$^{-1}$]',
@@ -173,10 +172,14 @@ def plot_timeheight(datasets,
         Custom field labels. If only one field is plotted, fieldlabels
         can be a string. Otherwise it should be a dictionary with
         entries <fieldname>: fieldlabel
-    labelsubplots : bool, list or tuple
-        Label subplots as (a), (b), (c), ... If a list or tuple is given
-        their values should be the horizontal and vertical position 
-        relative to each subaxis.
+    labelsubplots : bool, dict, string, or list-like
+        Label subplots as (a), (b), (c), ... If set to True, then labels
+        will be created inside of axes with default options (see the
+        `addLabels` function). If a dictionary is provided, then this is
+        passed to `addLabels`. Alternatively, labels may be placed
+        outside of axes by specifying 'outside'. If a list or tuple is
+        given, their values should be the horizontal and vertical
+        position of the outside label, relative to each subaxis.
     showcolorbars : bool
         Show colorbar per subplot
     fieldorder : 'C' or 'F'
@@ -353,16 +356,21 @@ def plot_timeheight(datasets,
     
     # Number sub figures as a, b, c, ...
     if labelsubplots is not False:
-        addLabels(axv)
-
-        # 2023-09-25: commenting this out and using my implementation
-        # of labeling subplots (above)
-        #try:
-        #    hoffset, voffset = labelsubplots
-        #except (TypeError, ValueError):
-        #    hoffset, voffset = -0.14, 1.0
-        #for i,axi in enumerate(axv):
-        #    axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
+        if labelsubplots is True:
+            # default inside labels
+            addLabels(axv)
+        elif isinstance(labelsubplots,dict):
+            addLabels(axv,**labelsubplots)
+        elif isinstance(labelsubplots,(str,list,tuple)):
+            try:
+                hoffset, voffset = labelsubplots
+            except (TypeError, ValueError):
+                assert labelsubplots.lower == 'outside', \
+                        'Unexpected labelsubplots specification'
+                # default outside labels
+                hoffset, voffset = -0.14, 1.0
+            for i,axi in enumerate(axv):
+                axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
 
     # Return cbar instead of array if ntotal==1
     if len(cbars)==1:
@@ -444,10 +452,14 @@ def plot_timehistory_at_height(datasets,
         If True, stack datasets together, otherwise stack by heights. If
         None, stack_by_datasets will be set based on the number of heights
         and datasets. 
-    labelsubplots : bool, list or tuple
-        Label subplots as (a), (b), (c), ... If a list or tuple is given
-        their values should be the horizontal and vertical position 
-        relative to each subaxis.
+    labelsubplots : bool, dict, string, or list-like
+        Label subplots as (a), (b), (c), ... If set to True, then labels
+        will be created inside of axes with default options (see the
+        `addLabels` function). If a dictionary is provided, then this is
+        passed to `addLabels`. Alternatively, labels may be placed
+        outside of axes by specifying 'outside'. If a list or tuple is
+        given, their values should be the horizontal and vertical
+        position of the outside label, relative to each subaxis.
     showlegend : bool (or None)
         Label different plots and show legend. If None, showlegend is set
         to True if legend will have more than one entry, otherwise it is
@@ -667,16 +679,21 @@ def plot_timehistory_at_height(datasets,
 
     # Number sub figures as a, b, c, ...
     if labelsubplots is not False:
-        addLabels(axv)
-
-        # 2023-09-25: commenting this out and using my implementation
-        # of labeling subplots (above)
-        #try:
-        #    hoffset, voffset = labelsubplots
-        #except (TypeError, ValueError):
-        #    hoffset, voffset = -0.14, 1.0
-        #for i,axi in enumerate(axv):
-        #    axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
+        if labelsubplots is True:
+            # default inside labels
+            addLabels(axv)
+        elif isinstance(labelsubplots,dict):
+            addLabels(axv,**labelsubplots)
+        elif isinstance(labelsubplots,(str,list,tuple)):
+            try:
+                hoffset, voffset = labelsubplots
+            except (TypeError, ValueError):
+                assert labelsubplots.lower == 'outside', \
+                        'Unexpected labelsubplots specification'
+                # default outside labels
+                hoffset, voffset = -0.14, 1.0
+            for i,axi in enumerate(axv):
+                axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
 
     # Add legend
     if showlegend:
@@ -762,10 +779,14 @@ def plot_profile(datasets,
         If True, stack datasets together, otherwise stack by times. If
         None, stack_by_datasets will be set based on the number of times
         and datasets. 
-    labelsubplots : bool, list or tuple
-        Label subplots as (a), (b), (c), ... If a list or tuple is given
-        their values should be the horizontal and vertical position 
-        relative to each subaxis.
+    labelsubplots : bool, dict, string, or list-like
+        Label subplots as (a), (b), (c), ... If set to True, then labels
+        will be created inside of axes with default options (see the
+        `addLabels` function). If a dictionary is provided, then this is
+        passed to `addLabels`. Alternatively, labels may be placed
+        outside of axes by specifying 'outside'. If a list or tuple is
+        given, their values should be the horizontal and vertical
+        position of the outside label, relative to each subaxis.
     showlegend : bool (or None)
         Label different plots and show legend. If None, showlegend is set
         to True if legend will have more than one entry, otherwise it is
@@ -999,16 +1020,21 @@ def plot_profile(datasets,
     
     # Number sub figures as a, b, c, ...
     if labelsubplots is not False:
-        addLabels(axv)
-
-        # 2023-09-25: commenting this out and using my implementation
-        # of labeling subplots (above)
-        #try:
-        #    hoffset, voffset = labelsubplots
-        #except (TypeError, ValueError):
-        #    hoffset, voffset = -0.14, -0.18
-        #for i,axi in enumerate(axv):
-        #    axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
+        if labelsubplots is True:
+            # default inside labels
+            addLabels(axv)
+        elif isinstance(labelsubplots,dict):
+            addLabels(axv,**labelsubplots)
+        elif isinstance(labelsubplots,(str,list,tuple)):
+            try:
+                hoffset, voffset = labelsubplots
+            except (TypeError, ValueError):
+                assert labelsubplots.lower == 'outside', \
+                        'Unexpected labelsubplots specification'
+                # default outside labels
+                hoffset, voffset = -0.14, -0.18
+            for i,axi in enumerate(axv):
+                axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
     
     # Add legend
     if showlegend:
@@ -1075,10 +1101,14 @@ def plot_spectrum(datasets,
         Custom field labels. If only one field is plotted, fieldlabels
         can be a string. Otherwise it should be a dictionary with
         entries <fieldname>: fieldlabel
-    labelsubplots : bool, list or tuple
-        Label subplots as (a), (b), (c), ... If a list or tuple is given
-        their values should be the horizontal and vertical position 
-        relative to each subaxis.
+    labelsubplots : bool, dict, string, or list-like
+        Label subplots as (a), (b), (c), ... If set to True, then labels
+        will be created inside of axes with default options (see the
+        `addLabels` function). If a dictionary is provided, then this is
+        passed to `addLabels`. Alternatively, labels may be placed
+        outside of axes by specifying 'outside'. If a list or tuple is
+        given, their values should be the horizontal and vertical
+        position of the outside label, relative to each subaxis.
     showlegend : bool (or None)
         Label different plots and show legend. If None, showlegend is set
         to True if legend will have more than one entry, otherwise it is
@@ -1214,12 +1244,21 @@ def plot_spectrum(datasets,
 
     # Number sub figures as a, b, c, ...
     if labelsubplots is not False:
-        try:
-            hoffset, voffset = labelsubplots
-        except (TypeError, ValueError):
-            hoffset, voffset = -0.14, -0.18
-        for i,axi in enumerate(axv):
-            axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
+        if labelsubplots is True:
+            # default inside labels
+            addLabels(axv)
+        elif isinstance(labelsubplots,dict):
+            addLabels(axv,**labelsubplots)
+        elif isinstance(labelsubplots,(str,list,tuple)):
+            try:
+                hoffset, voffset = labelsubplots
+            except (TypeError, ValueError):
+                assert labelsubplots.lower == 'outside', \
+                        'Unexpected labelsubplots specification'
+                # default outside labels
+                hoffset, voffset = -0.14, -0.18
+            for i,axi in enumerate(axv):
+                axi.text(hoffset,voffset,'('+chr(i+97)+')',transform=axi.transAxes,size=16)
 
     # Add legend
     if showlegend:
@@ -1233,6 +1272,52 @@ def plot_spectrum(datasets,
 # DEFINITION OF AUXILIARY CLASSES AND FUNCTIONS
 #
 # ---------------------------------------------
+
+def addLabels(axs,loc='upper right', fontsize=14, alpha=0.6, pad=6, start='a', **bbox_props):
+    '''
+    Adds label to subfigures.
+
+    Inputs
+    ------
+    axs: axis object
+        Axis to apply the label on. Can be of any shape and dimension
+    loc: str
+        Location of the labels
+    fontsize: scalar
+        Font size
+    alpha: scalar
+        Alpha value
+    pad: int
+        Distance from corner for label. pad=0 is label touching the corner of the plot
+    start: char
+        Character in which to start labeling the subplots
+    '''
+
+    # Ensure axs is iterable
+    axs = np.array(axs)
+    
+    if   loc == 'upper right':  xy=(1,1); xytext=(-pad,-pad); xloc, yloc = 0.97, 0.97;  ha='right'; va='top'
+    elif loc == 'upper left' :  xy=(0,1); xytext=( pad,-pad); xloc, yloc = 0.03, 0.97;  ha='left';  va='top'
+    elif loc == 'lower right':  xy=(1,0); xytext=(-pad, pad); xloc, yloc = 0.97, 0.03;  ha='right'; va='bottom'
+    elif loc == 'lower left' :  xy=(0,0); xytext=( pad, pad); xloc, yloc = 0.03, 0.03;  ha='left';  va='bottom'
+    else:
+        raise ValueError('loc not recognized. Stopping.')
+    
+    labels = list(map(chr, range(ord(start), 123)))
+    if len(axs.flatten()) > len(labels):
+        # More than a--z, so create 1a, 1b, 1c, 2a, etc. First find the number of numbers number of letters
+        nN = np.shape(axs)[0]
+        nL = np.shape(axs)[1]
+        labels = [str(number) + chr(ord('a') + iletter) for number in range(1, nN + 1) for iletter in range(nL)]
+
+    props = dict(facecolor='white', alpha=alpha, edgecolor='silver', boxstyle='square', pad=0.15)
+    for key,val in bbox_props.items():
+        props[key] = val
+    
+    for i, ax in enumerate(axs.flatten()):
+        ax.annotate(f'$({labels[i]})$', xy=xy, color='black', ha=ha, va=va, xycoords='axes fraction',
+                    xytext=xytext, textcoords='offset points', fontsize=fontsize, bbox=props)
+
 
 class InputError(Exception):
     """Exception raised for errors in the input.
