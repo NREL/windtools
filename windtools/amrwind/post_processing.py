@@ -109,12 +109,23 @@ class ABLStatistics(object):
     def __getitem__(self,key):
         return self.ds[key]
 
-    def rolling_mean(self,Tavg):
+    def rolling_mean(self,Tavg,resample=False,resample_offset='1s'):
         """Calculate a rolling mean assuming a fixed time-step size.
         The rolling window size Tavg is given in seconds.
         """
         dt = float(self.t[1] - self.t[0])
-        assert np.all(np.diff(self.t) == dt), 'Output time interval is variable'
+        if not resample:
+            assert np.all(np.diff(self.t) == dt), \
+                    'Output time interval is variable, set resample=True'
+        elif not np.all(np.diff(self.t) == dt):
+            if self.datetime0 is None:
+                print('Converting to TimedeltaIndex')
+                tdelta = pd.to_timedelta(self.ds.coords['time'], unit='s')
+                self.ds = self.ds.assign_coords(time=tdelta)
+            print('Resampling to',resample_offset,'intervals')
+            self.ds = self.ds.resample(time=resample_offset).interpolate()
+            self.t = self.ds.coords['time'] / np.timedelta64(1,'s') # convert to seconds
+            dt = float(self.t[1] - self.t[0])
         Navg = int(Tavg / dt)
         assert Navg > 0
         return self.ds.rolling(time=Navg).mean()
