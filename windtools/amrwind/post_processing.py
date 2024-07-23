@@ -8,15 +8,40 @@ from netCDF4 import Dataset
 
 class ABLStatistics(object):
 
-    def __init__(self,fpath,start_date=None,mean_profiles=False):
-        self.fpath = fpath
+    def __init__(self,fpath,start_date=None,mean_profiles=False,
+                 calc_TI=False,calc_TI_TKE=False):
+        """Load planar averaged ABL statistics into an underlying xarray
+        dataset for analysis. By default, only surface time histories
+        are loaded; setting `mean_profiles=True` will also load
+        time--height data from the "mean_profiles" group within the
+        dataset.
+
+        Turbulence intensities can be estimated with the `calc_TI` or
+        `calc_TI_TKE` parameters. The former is based on horizontal
+        variances only (<u'u'>, <u'v'>, and <v'v'>) and accounts for
+        flow directionality, whereas the latter is based on an average
+        of three velocity variances (<u'u'>, <v'v'>, and <w'w'>).
+        """
+        self._check_fpaths(fpath)
         if start_date:
             self.datetime0 = pd.to_datetime(start_date)
         else:
             self.datetime0 = None
-        self._load_timeseries()
+        self._load_timeseries(mean_profiles)
+        self.t = self.ds.coords['time']
         if mean_profiles:
-            self._load_timeheight_profiles()
+            self.z = self.ds.coords['height']
+            self._calc_total_fluxes()
+            if calc_TI: self._calc_TI()
+            if calc_TI_TKE: self._calc_TI_TKE()
+
+    def _check_fpaths(self,fpath):
+        assert isinstance(fpath, (str,list,tuple))
+        if isinstance(fpath, str):
+            fpath = [fpath]
+        self.fpaths = fpath
+        for fpath in self.fpaths:
+            assert os.path.isfile(fpath), f'{fpath} not found'
 
     def _setup_time_coords(self,ds):
         if self.datetime0:
@@ -29,26 +54,81 @@ class ABLStatistics(object):
             self.time_coord = 'time'
         return ds
 
-    def _load_timeseries(self):
-        ds = xr.load_dataset(self.fpath)
-        ds = self._setup_time_coords(ds)
-        self.ds = ds
+    def _load_timeseries(self,load_mean_profiles=False):
+        dslist = []
+        for fpath in self.fpaths:
 
-    def _load_timeheight_profiles(self):
-        ds = xr.load_dataset(self.fpath, group='mean_profiles')
-        ds = ds.rename({'h':'height'})
-        times = self.ds.coords[self.time_coord].values
-        ds = ds.assign_coords({
-            self.time_coord: ('num_time_steps',times),
-            'height': ds['height'],
-        })
-        ds = ds.swap_dims({'num_time_steps':self.time_coord, 'nlevels':'height'})
-        ds = ds.transpose(self.time_coord,'height')
-        self.ds = xr.combine_by_coords([self.ds, ds])
-        self.ds[self.time_coord] = np.round(self.ds[self.time_coord],5)
+            ds = xr.load_dataset(fpath)
+            ds = self._setup_time_coords(ds)
 
+            if load_mean_profiles:
+                pro = xr.load_dataset(fpath, group='mean_profiles')
+                pro = pro.rename({'h':'height'})
+                pro = pro.assign_coords({
+                    self.time_coord: ('num_time_steps',
+                                      ds.coords[self.time_coord].values),
+                    'height': pro['height'],
+                })
+                pro = pro.swap_dims({'num_time_steps':self.time_coord,
+                                     'nlevels':'height'})
+                # make sure underlying array data have the expected shape
+                pro = pro.transpose(self.time_coord,'height')
+                # merge time-height profiles with timeseries
+                ds = xr.combine_by_coords([ds, pro])
 
+            dslist.append(ds)
 
+        if len(dslist) > 1:
+            for ds,fpath in zip(dslist,self.fpaths):
+                # conflicting attrs causes a merge error
+                print('Merging', fpath, ds.attrs.pop('created_on').rstrip())
+            # concat and merge
+            self.ds = xr.combine_by_coords(dslist)
+        else:
+            self.ds = dslist[0]
+
+    def _calc_total_fluxes(self):
+        for varn in self.ds.data_vars:
+            if varn.endswith('_r'):
+                varn_sfs = varn[:-2] + '_sfs'
+                if varn_sfs in self.ds.data_vars:
+                    varn_tot = varn[:-2] + '_tot'
+                    self.ds[varn_tot] = self.ds[varn] + self.ds[varn_sfs]
+
+    def _calc_TI(self):
+        ang = np.arctan2(self.ds['v'], self.ds['u'])
+        rotatedvar = self.ds["u'u'_r"] * np.cos(ang)**2 \
+                   + self.ds["u'v'_r"] * 2*np.sin(ang)*np.cos(ang) \
+                   + self.ds["v'v'_r"] * np.sin(ang)**2
+        self.ds['TI'] = np.sqrt(rotatedvar) / self.ds['hvelmag']
+
+    def _calc_TI_TKE(self):
+        meanvar = (self.ds["u'u'_r"] + self.ds["v'v'_r"] + self.ds["w'w'_r"]) / 3
+        self.ds['TI_TKE'] = np.sqrt(meanvar) / self.ds['hvelmag']
+
+    def __getitem__(self,key):
+        return self.ds[key]
+
+    def rolling_mean(self,Tavg,resample=False,resample_offset='1s'):
+        """Calculate a rolling mean assuming a fixed time-step size.
+        The rolling window size Tavg is given in seconds.
+        """
+        dt = float(self.t[1] - self.t[0])
+        if not resample:
+            assert np.all(np.diff(self.t) == dt), \
+                    'Output time interval is variable, set resample=True'
+        elif not np.all(np.diff(self.t) == dt):
+            if self.datetime0 is None:
+                print('Converting to TimedeltaIndex')
+                tdelta = pd.to_timedelta(self.ds.coords['time'], unit='s')
+                self.ds = self.ds.assign_coords(time=tdelta)
+            print('Resampling to',resample_offset,'intervals')
+            self.ds = self.ds.resample(time=resample_offset).interpolate()
+            self.t = self.ds.coords['time'] / np.timedelta64(1,'s') # convert to seconds
+            dt = float(self.t[1] - self.t[0])
+        Navg = int(Tavg / dt)
+        assert Navg > 0
+        return self.ds.rolling(time=Navg).mean()
 
 
 class Sampling(object):
@@ -638,10 +718,3 @@ def addDatetime(ds,dt,origin=pd.to_datetime('2000-01-01 00:00:00'), computemean=
         ds['wp'] = ds['w'] - meanw
 
     return ds
-
-
-
-
-
-
-
