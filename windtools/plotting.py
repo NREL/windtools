@@ -1233,7 +1233,7 @@ def plot_spectrum(datasets,
 #
 # ---------------------------------------------
 
-def addLabels(axs,loc='upper right', fontsize=14, alpha=0.6, pad=6, start='a'):
+def addLabels(axs,loc='upper right', fontsize=14, alpha=0.6, pad=6, start='a', **bbox_props):
     '''
     Adds label to subfigures.
 
@@ -1271,6 +1271,8 @@ def addLabels(axs,loc='upper right', fontsize=14, alpha=0.6, pad=6, start='a'):
         labels = [str(number) + chr(ord('a') + iletter) for number in range(1, nN + 1) for iletter in range(nL)]
 
     props = dict(facecolor='white', alpha=alpha, edgecolor='silver', boxstyle='square', pad=0.15)
+    for key,val in bbox_props.items():
+        props[key] = val
     
     for i, ax in enumerate(axs.flatten()):
         ax.annotate(f'$({labels[i]})$', xy=xy, color='black', ha=ha, va=va, xycoords='axes fraction',
