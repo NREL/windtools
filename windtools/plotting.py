@@ -1370,6 +1370,8 @@ class PlottingInput(object):
             # convert dataset types here
             if isinstance(df, (xr.Dataset,xr.DataArray)):
                 # handle xarray datatypes
+                if isinstance(df, xr.Dataset):
+                    df = df[self.fields]
                 self.datasets[dfname] = df.to_dataframe()
                 columns = self.datasets[dfname].columns
                 if len(columns) == 1:
