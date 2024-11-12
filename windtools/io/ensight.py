@@ -54,12 +54,10 @@ def read_mesh(fpath,headerlength=8,chunksize=None,read_connectivity=False,verbos
                 print(f'WARNING: element type "{element_type}" not tested')
             Ncell = int(f.readline())
             if chunksize is None:
-                conn = pd.read_csv(f,header=None,nrows=Ncell,
-                                   delim_whitespace=True)
+                conn = pd.read_csv(f,header=None,nrows=Ncell,sep='\s+')
             else:
                 conn = pd.concat(pd.read_csv(f,header=None,nrows=Ncell,
-                                             delim_whitespace=True,
-                                             chunksize=chunksize))
+                                             sep='\s+',chunksize=chunksize))
         if verbose:
             print(f'read connectivity data for {Ncell} cells')
         # switch to 0-indexing

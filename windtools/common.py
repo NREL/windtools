@@ -14,7 +14,7 @@ import pandas as pd
 import xarray as xr
 
 
-def calc_wind(df=None,u='u',v='v'):
+def calc_wind(*args,u='u',v='v'):
     """Calculate wind speed and direction from horizontal velocity
     components, u and v.
 
@@ -24,22 +24,33 @@ def calc_wind(df=None,u='u',v='v'):
         Calculate from data columns (pandas dataframe) or data-arrays
         (xarrays dataset) named 'u' and 'v'
     u : str or array-like
-        Data name if 'df' is provided; otherwise array of x-velocities
+        Data name if dataframe/set is provided; otherwise array of
+        x-velocities
     v : str or array-like
-        Data name if 'df' is provided; otherwise array of y-velocities
+        Data name if dataframe/set is provided; otherwise array of
+        y-velocities
     """
-    if df is None:
-        assert (u is not None) and (v is not None)
-    elif isinstance(df,pd.DataFrame):
-        assert all(velcomp in df.columns for velcomp in [u,v]), \
+    df_or_ds = None
+    if len(args) == 0:
+        # u and v specified through kwargs
+        assert u.shape == v.shape
+    elif len(args) == 1:
+        # dataframe or dataset provided
+        df_or_ds = args[0]
+    elif len(args) == 2:
+        u = args[0]
+        v = args[1]
+        assert u.shape == v.shape
+    if isinstance(df_or_ds,pd.DataFrame):
+        assert all(velcomp in df_or_ds.columns for velcomp in [u,v]), \
                 'velocity components u/v not found; set u and/or v'
-        u = df[u]
-        v = df[v]
-    elif isinstance(df,xr.Dataset):
-        assert all(velcomp in df.variables for velcomp in [u,v]), \
+        u = df_or_ds[u]
+        v = df_or_ds[v]
+    elif isinstance(df_or_ds,xr.Dataset):
+        assert all(velcomp in df_or_ds.data_vars for velcomp in [u,v]), \
                 'velocity components u/v not found; set u and/or v'
-        u = df[u]
-        v = df[v]
+        u = df_or_ds[u]
+        v = df_or_ds[v]
     wspd = np.sqrt(u**2 + v**2)
     wdir = 180. + np.degrees(np.arctan2(u, v))
     return wspd, wdir
