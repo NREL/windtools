@@ -947,7 +947,10 @@ def plot_profile(datasets,
                     # Use time as label
                     if showlegend:
                         if isinstance(time, (int,float,np.number)):
-                            plotting_properties['label'] = '{:g} s'.format(time)
+                            tval = time / np.timedelta64(1,'s') \
+                                   if isinstance(time, np.timedelta64) \
+                                   else time
+                            plotting_properties['label'] = '{:g} s'.format(tval)
                         else:
                             if plot_local_time is False:
                                 plotting_properties['label'] = pd.to_datetime(time).strftime('%Y-%m-%d %H%M UTC')
