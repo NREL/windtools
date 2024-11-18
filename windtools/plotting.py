@@ -1347,7 +1347,7 @@ class PlottingInput(object):
 
     def __init__(self, datasets, fields, **argd):
         # Add all arguments as class attributes
-        self.__dict__.update({'datasets':datasets,
+        self.__dict__.update({'datasets':datasets.copy(),
                               'fields':fields,
                               **argd})
 
