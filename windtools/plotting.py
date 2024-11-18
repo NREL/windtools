@@ -112,7 +112,7 @@ standard_spectrumlabels = spectrumlabels_default_units
 dimension_names = {
     'time':      ['datetime','time','Time','t'],
     'height':    ['height','heights','z','zagl','zstag'],
-    'frequency': ['frequency','f',]
+    'frequency': ['frequency','freq','f',]
 }
 
 # Show debug information
