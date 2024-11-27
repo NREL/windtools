@@ -171,9 +171,9 @@ class Sampling(object):
         self.z = np.sort(np.unique(ds['coordinates'].isel(ndim=2)))
 
         # identify the normal
-        #if ds.axis3[0] == 1: self.normal='x'
-        #if ds.axis3[1] == 1: self.normal='y'
-        #if ds.axis3[2] == 1: self.normal='z'
+        #if ds.offset_vector[0] == 1: self.normal='x'
+        #if ds.offset_vector[1] == 1: self.normal='y'
+        #if ds.offset_vector[2] == 1: self.normal='z'
 
 
 
@@ -436,9 +436,9 @@ class Sampling(object):
         velz_all = np.reshape(velz_old_all, (ndt, self.nz, self.ny, self.nx)).T
 
         # The order of the dimensions varies depending on the `normal`
-        if   (ds.axis3 == [1,0,0]).all(): ordereddims = ['y','z','x','samplingtimestep']
-        elif (ds.axis3 == [0,1,0]).all(): ordereddims = ['x','z','y','samplingtimestep']
-        elif (ds.axis3 == [0,0,1]).all(): ordereddims = ['x','y','z','samplingtimestep']
+        if   (ds.offset_vector == [1,0,0]).all(): ordereddims = ['y','z','x','samplingtimestep']
+        elif (ds.offset_vector == [0,1,0]).all(): ordereddims = ['x','z','y','samplingtimestep']
+        elif (ds.offset_vector == [0,0,1]).all(): ordereddims = ['x','y','z','samplingtimestep']
         else:
             self._read_nonaligned_plane_sampler_xr(ds)
             ordereddims = ['x','y','z','samplingtimestep']
