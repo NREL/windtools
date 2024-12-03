@@ -157,7 +157,10 @@ class Sampling(object):
 
         self.sampling_type = ds.sampling_type
 
-        [self.nx, self.ny, self.nz] = ds.ijk_dims
+        if 'ijk_dims' in list(ds.attrs):
+            # ijk_dims won't exist in probe sampler
+            [self.nx, self.ny, self.nz] = ds.ijk_dims
+
         self.ndt = len(ds.num_time_steps)
         self.tdi = ds.num_time_steps[0]
         self.tdf = ds.num_time_steps[-1]
@@ -166,12 +169,6 @@ class Sampling(object):
         self.x = np.sort(np.unique(ds['coordinates'].isel(ndim=0)))
         self.y = np.sort(np.unique(ds['coordinates'].isel(ndim=1)))
         self.z = np.sort(np.unique(ds['coordinates'].isel(ndim=2)))
-
-        # identify the normal
-        #if ds.axis3[0] == 1: self.normal='x'
-        #if ds.axis3[1] == 1: self.normal='y'
-        #if ds.axis3[2] == 1: self.normal='z'
-
 
 
     def getGroupProperties_h5py(self, ds=None, group=None):
@@ -196,11 +193,6 @@ class Sampling(object):
         self.ndt = ds[firstvar].shape[0]
         self.tdi = 0
         self.tdf = self.ndt-1
-
-        # Identify the normal
-        # if self.ny == 1: self.normal='y'
-        # if self.nz == 1: self.normal='z'
-        # if self.nz == 1: self.normal='z'
 
 
     def _get_groups(self):
@@ -310,7 +302,6 @@ class Sampling(object):
         else:
             self.reqvars = var
 
-
         self.getGroupProperties_xr(ds = dsraw)
 
         if   self.sampling_type == 'LineSampler':
@@ -320,7 +311,7 @@ class Sampling(object):
         elif self.sampling_type == 'PlaneSampler':
             ds = self._read_plane_sampler_xr(dsraw, group, itime, ftime, step, outputPath, verbose)
         elif self.sampling_type == 'ProbeSampler':
-            ds = self._read_probe_sampler(dsraw)
+            ds = self._read_probe_sampler(dsraw, group, itime, ftime, step, outputPath, verbose)
         else:
             raise ValueError(f'Stopping. Sampling type {self.sampling_type} not recognized')
 
@@ -433,10 +424,12 @@ class Sampling(object):
         vely_all = np.reshape(vely_old_all, (ndt, self.nz, self.ny, self.nx)).T
         velz_all = np.reshape(velz_old_all, (ndt, self.nz, self.ny, self.nx)).T
 
-        # The order of the dimensions varies depending on the `normal`
-        if   (ds.axis3 == [1,0,0]).all(): ordereddims = ['y','z','x','samplingtimestep']
-        elif (ds.axis3 == [0,1,0]).all(): ordereddims = ['x','z','y','samplingtimestep']
-        elif (ds.axis3 == [0,0,1]).all(): ordereddims = ['x','y','z','samplingtimestep']
+        # The order of the dimensions varies depending on the `normal`.
+        # Ensure backward compatibility with AMR-Wind label change
+        offset_label = 'offset_vector' if 'offset_vector' in ds.attrs else 'axis3'
+        if   (ds.attrs[offset_label] == [1,0,0]).all(): ordereddims = ['y','z','x','samplingtimestep']
+        elif (ds.attrs[offset_label] == [0,1,0]).all(): ordereddims = ['x','z','y','samplingtimestep']
+        elif (ds.attrs[offset_label] == [0,0,1]).all(): ordereddims = ['x','y','z','samplingtimestep']
         else:
             self._read_nonaligned_plane_sampler_xr(ds)
             ordereddims = ['x','y','z','samplingtimestep']
@@ -587,8 +580,75 @@ class Sampling(object):
 
 
 
-    def _read_probe_sampler(self,ds):
-        raise NotImplementedError(f'Sampling `ProbeSampler` is not implemented. Consider implementing it.')
+    def _read_probe_sampler(self, ds, group, itime, ftime, step, outputPath, verbose):
+        '''
+        Reads in generic sampler. This function is still specific for terrain-following slices
+        where the coordinates x and y are in a grid. If that isn't the case, it will fail.
+        '''
+
+        print(f"Genering probe sampler identified. Assuming this is a terrain-following sampling.")
+
+        if ftime == -1:
+            ftime = self.ndt
+
+        print(f'The following variables are available in this dataset: {list(ds.keys())}')
+        for curr_var in set(self.reqvars):
+            if curr_var not in list(ds.keys()):
+                print(f'Variable {curr_var} not available. Skipping it. Available variables: {list(ds.keys())}')
+
+        sampled_vars = [v for v in self.reqvars if v in list(ds.keys())]
+
+        # Extract x, y, z from coordinates
+        x = ds.coordinates[:, 0]
+        y = ds.coordinates[:, 1]
+        z = ds.coordinates[:, 2]
+        
+        # Reshape the x and y arrays to match the grid
+        x_unique = np.unique(x)
+        y_unique = np.unique(y)
+        x_reshaped = x.values.reshape(len(x_unique), len(y_unique))
+        y_reshaped = y.values.reshape(len(x_unique), len(y_unique))
+        
+        # Select the appropriate time steps
+        selected_time_steps = np.arange(itime, ftime, step)
+
+        # Create new dimensions
+        new_coords = {
+            "x": x_unique,
+            "y": y_unique,
+            "samplingtimestep": selected_time_steps,
+        }
+        
+        # Reshape the data variables
+        reshaped_vars = {}
+        for var_name in sampled_vars:
+            #reshaped_data = ds[var_name].sel(num_time_steps=selected_time_steps).values.reshape(len(x_unique), len(y_unique), len(selected_time_steps))
+            reshaped_data = ds[var_name].sel(num_time_steps=selected_time_steps).values.reshape( len(selected_time_steps), len(x_unique), len(y_unique))
+            reshaped_vars[var_name] = (["samplingtimestep", "x", "y"], reshaped_data)
+        
+        # Create the new dataset with x and y as dimensional coordinates
+        ds_new = xr.Dataset(
+            data_vars=reshaped_vars,
+            coords=new_coords)
+        
+        # Add z as a regular data variable and rename variables
+        z_reshaped = z.values.reshape(len(x_unique), len(y_unique))
+        ds_new["samplingheight"] = (["x", "y"], z_reshaped)
+        ds_new = ds_new.rename_vars({'velocityx':'u', 'velocityy':'v', 'velocityz':'w'})
+
+
+        if outputPath is not None:
+            if outputPath.endswith('.zarr'):
+                print(f'Saving {outputPath}')
+                ds_new.to_zarr(outputPath)
+            elif outputPath.endswith('.nc'):
+                print(f'Saving {outputPath}')
+                ds_new.to_netcdf(outputPath)
+            else:
+                print(f'Saving {group}.nc')
+                ds_new.to_netcdf(os.path.join(outputPath,f'{group}.nc'))
+
+        return ds_new
 
 
 
@@ -630,7 +690,8 @@ class Sampling(object):
             raise ValueError(f'The output path should exist. Stopping.')
 
         if terrain:
-            var = ['velocityx','velocityy','velocityz','terrainBlank']
+            #var = ['velocityx','velocityy','velocityz','terrainBlank']
+            var = ['velocityx','velocityy','velocityz','mu_turb']
         else:
             var = ['velocityx','velocityy','velocityz']
 
@@ -651,9 +712,12 @@ class Sampling(object):
             zarray = ds.z
 
         if terrain:
-            ds['u'] = ds['u'].where(ds['terrainBlank'] == 0, np.nan)
-            ds['v'] = ds['v'].where(ds['terrainBlank'] == 0, np.nan)
-            ds['w'] = ds['w'].where(ds['terrainBlank'] == 0, np.nan)
+            #ds['u'] = ds['u'].where(ds['terrainBlank'] == 0, np.nan)
+            #ds['v'] = ds['v'].where(ds['terrainBlank'] == 0, np.nan)
+            #ds['w'] = ds['w'].where(ds['terrainBlank'] == 0, np.nan)
+            ds['u'] = ds['u'].where(ds['mu_turb'] > 0, np.nan)
+            ds['v'] = ds['v'].where(ds['mu_turb'] > 0, np.nan)
+            ds['w'] = ds['w'].where(ds['mu_turb'] > 0, np.nan)
 
         if t0 is None and dt is None:
             timegiven=False
