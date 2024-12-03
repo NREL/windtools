@@ -170,12 +170,6 @@ class Sampling(object):
         self.y = np.sort(np.unique(ds['coordinates'].isel(ndim=1)))
         self.z = np.sort(np.unique(ds['coordinates'].isel(ndim=2)))
 
-        # identify the normal
-        #if ds.offset_vector[0] == 1: self.normal='x'
-        #if ds.offset_vector[1] == 1: self.normal='y'
-        #if ds.offset_vector[2] == 1: self.normal='z'
-
-
 
     def getGroupProperties_h5py(self, ds=None, group=None):
         
@@ -199,11 +193,6 @@ class Sampling(object):
         self.ndt = ds[firstvar].shape[0]
         self.tdi = 0
         self.tdf = self.ndt-1
-
-        # Identify the normal
-        # if self.ny == 1: self.normal='y'
-        # if self.nz == 1: self.normal='z'
-        # if self.nz == 1: self.normal='z'
 
 
     def _get_groups(self):
@@ -435,10 +424,12 @@ class Sampling(object):
         vely_all = np.reshape(vely_old_all, (ndt, self.nz, self.ny, self.nx)).T
         velz_all = np.reshape(velz_old_all, (ndt, self.nz, self.ny, self.nx)).T
 
-        # The order of the dimensions varies depending on the `normal`
-        if   (ds.offset_vector == [1,0,0]).all(): ordereddims = ['y','z','x','samplingtimestep']
-        elif (ds.offset_vector == [0,1,0]).all(): ordereddims = ['x','z','y','samplingtimestep']
-        elif (ds.offset_vector == [0,0,1]).all(): ordereddims = ['x','y','z','samplingtimestep']
+        # The order of the dimensions varies depending on the `normal`.
+        # Ensure backward compatibility with AMR-Wind label change
+        offset_label = 'offset_vector' if 'offset_vector' in ds.attrs else 'axis3'
+        if   (ds.attrs[offset_label] == [1,0,0]).all(): ordereddims = ['y','z','x','samplingtimestep']
+        elif (ds.attrs[offset_label] == [0,1,0]).all(): ordereddims = ['x','z','y','samplingtimestep']
+        elif (ds.attrs[offset_label] == [0,0,1]).all(): ordereddims = ['x','y','z','samplingtimestep']
         else:
             self._read_nonaligned_plane_sampler_xr(ds)
             ordereddims = ['x','y','z','samplingtimestep']
