@@ -131,8 +131,8 @@ class ABLStatistics(object):
         return self.ds.rolling(time=Navg).mean()
 
 
-class Sampling(object):
 
+class StructuredSampling(object):
     def __init__(self,fpath,start_date=None,read_data=False):
         self.fpath = fpath
         self.dt    = None
@@ -207,11 +207,11 @@ class Sampling(object):
 
     def read_data(self, groups_to_read):
 
-        groups_to_read = groups_to_read if isinstance(groups_to_read,str) else groups_to_read
+        groups_to_read = [groups_to_read] if isinstance(groups_to_read,str) else groups_to_read
 
         ds_all = []
         for g in groups_to_read:
-            ds_single = read_single_group(g)
+            ds_single = self.read_single_group(g)
             ds_all.append(ds_single)
 
         return ds_all
@@ -777,6 +777,16 @@ class Sampling(object):
 
         return ds
 
+
+class Sampling(StructuredSampling):
+    # For backward compatibility
+    def __init__(self, *args, **kwargs):
+        import warnings
+        warnings.warn('The Sampling class is deprecated and will be removed in future versions.'
+                ' Use StructuredSampling instead.', DeprecationWarning, stacklevel=2)
+        super().__init__(*args, **kwargs)
+
+
 def addDatetime(ds,dt,origin=pd.to_datetime('2000-01-01 00:00:00'), computemean=True):
     '''
     Add temporal means to dataset. Means are computed for every spatial location
@@ -817,3 +827,4 @@ def addDatetime(ds,dt,origin=pd.to_datetime('2000-01-01 00:00:00'), computemean=
         ds['wp'] = ds['w'] - meanw
 
     return ds
+
