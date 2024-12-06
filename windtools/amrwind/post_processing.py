@@ -2,8 +2,11 @@ import pandas as pd
 import xarray as xr
 import numpy as np
 import os
+import glob
+import re
 import dask.array as da
 import h5py
+import warnings
 from netCDF4 import Dataset
 
 class ABLStatistics(object):
@@ -133,18 +136,157 @@ class ABLStatistics(object):
 
 
 class StructuredSampling(object):
-    def __init__(self,fpath,start_date=None,read_data=False):
-        self.fpath = fpath
+    def __init__(self, pppath):
+        '''
+        pppath: str
+            Full path to `post_processing` directory
+            
+            full path to .nc file (including extension) if netcdf sampling
+            or full path 
+
+        Examples
+        ========
+
+        # read netcdf
+        s = StructuredSampling('/path/to/post_processing')
+        s.read_single_group(pptag='box_lr',group='Low',file='box_lr00100.nc',itime=0, ftime=4)
+
+        # read native
+        s = StructuredSampling('/path/to/post_processing')
+        s.read_single_group(pptag='box_lr',group='Low',itime=0, ftime=4)
+
+        # read netcdf backward compatible
+        s = StructuredSampling('/path/to/post_processing/box_lr00100.nc'')
+        s.read_single_group('Low',itime=0,ftime=4)
+
+        '''
+        self.pppath = pppath
         self.dt    = None
 
-        self.groups = self._get_groups()
+        # Support backward compatibility
+        if os.path.isfile(self.pppath) and pppath[-3:].lower()=='.nc':
+            warnings.warn('This method of reading the sampling is deprecated and will be'
+                          'removed in future versions.', DeprecationWarning, stacklevel=2)
+            self.pppath = os.path.dirname(self.pppath)
+            self.pptag  = os.path.basename(self.pppath)
+            self.samplingformat = 'netcdf'
+            self.groups = self._get_groups()
         
-        if read_data:
-            self.read_data(groups_to_read = self.groups)
+        assert os.path.ispath(self.pppath)
+
+        # Identify if netcdf of native format
+
+
+
+        #if os.path.isfile(self.fpath) and fpath[-3:].lower()=='.nc':
+        #    self.samplingformat = 'netcdf'
+        #else:
+        #    self.samplingformat = 'native'
+
+        #self.groups = self._get_groups()
+        #
+        #print(self._info_string())
+
 
     def __repr__(self):
-        header=f'Following groups sampled:\n'
-        return header+''.join([f'    {g}\n' for g in self.groups])
+        return self._info_string()
+
+
+    def _info_string(self):
+
+        s = ''
+
+        if self.samplingformat == 'netcdf':
+            s += 'Sampling performed using NetCDF.\n'
+        elif self.samplingformat == 'native':
+            s += 'Sampling performed using native particles.\n'
+
+        formatted_groups = ', '.join([f'{g}' for g in self.groups])
+        s += f'Groups available: {formatted_groups}\n'
+
+        return s
+
+
+    def _get_groups_in_pp_tag(self):
+        '''
+        Get all group names within a post-processing tag
+        '''
+
+        if self.samplingformat == 'netcdf':
+            with Dataset(self.fpath) as f:
+                groups = list(f.groups.keys())
+            groups = [groups] if isinstance(groups,str) else groups
+
+        elif self.samplingformat == 'native':
+            pp_names = self._get_unique_pp_names_native()
+
+        return groups
+
+
+    def _get_unique_pp_tags_native(self):
+        '''
+        Get all unique post processing tags.
+        Post processing tags are the strings that go into `incflow.post_processing`
+        '''
+
+        # Get all files/directories
+        fullpaths = glob.glob(os.path.join(self.fpath, '*'))
+        allfiles = [os.path.basename(p) for p in fullpaths]
+
+        # Remove the time step info
+        basenames = [re.match(r'([a-zA-Z_]+)\d+', file).group(1)
+                     for file in allfiles if re.match(r'([a-zA-Z_]+)\d+', file)]
+
+        # Get unique values that have 4 or more directories
+        strings, count = np.unique(basenames, return_counts=True)
+        pp_tags = strings[count>=4]
+
+        return pp_tags
+
+    def read_single_group_native(self, pptag, group,  itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz'], verbose=False, package='xr'):
+
+        ds = []
+        for i, dt in enumerate(np.arange(itime, ftime, step)):
+            ds[i] = self._read_single_dt_native(pptag, group, dt)
+        #ds = ds.concat(dim=samplingtimestep)
+
+
+
+    def _read_single_dt_native(self, pptag, group, dt):
+
+	# the line below can likely go to the object initialization (if we already know it's native)
+        pfile = AmrexParticleFile(os.path.join(self.pppath, self.pptag+f'{dt:05}', 'particles'))
+	# Load file
+        pt = pfile.load(time_index=dt, label=pptag, root_dir=self.pppath, suffix='particles')
+        pt.load_binary_data()
+
+        # Get set_id given requested group
+        pt.parse_info()
+        # Need to add reading of groups to parser above
+        # then, get the set_id related to `group` requested
+        desired_set_id = pt.info[group]
+
+        pt.df[pt.df['set_id'] == desired_set_id]
+
+        # Convert dataframe to dataset
+	x=np.unique(pt.df['xco'].values)
+	y=np.unique(pt.df['yco'].values)
+	z=np.unique(pt.df['zco'].values)
+
+	u = pt.df['velocityx'].values.reshape(len(x), len(y), len(z))
+	v = pt.df['velocityy'].values.reshape(len(x), len(y), len(z))
+	w = pt.df['velocityz'].values.reshape(len(x), len(y), len(z))
+
+	ds = xr.Dataset(
+	    data_vars=dict(
+		u=(["x", "y", "z"], u),
+		v=(["x", "y", "z"], v),
+		w=(["x", "y", "z"], w),
+	    ),
+	    coords=dict(x=("x", x), y=("y", y),z=("z", z)),
+	)
+
+	return ds
 
 
     def getGroupProperties_xr(self, ds=None, group=None):
@@ -178,7 +320,6 @@ class StructuredSampling(object):
         if ds is None and group is not None:
             ds = h5py.File(self.fpath)[group]
 
-
         # Get axes
         self.x = np.sort(np.unique(ds['coordinates'][()][:,0]))
         self.y = np.sort(np.unique(ds['coordinates'][()][:,1]))
@@ -195,22 +336,18 @@ class StructuredSampling(object):
         self.tdf = self.ndt-1
 
 
-    def _get_groups(self):
-        with Dataset(self.fpath) as f:
-            groups = list(f.groups.keys())
-        groups = [groups] if isinstance(groups,str) else groups
-        return groups
-
-
     def set_dt(self, dt):
         self.dt = dt
 
-    def read_data(self, groups_to_read):
+    def read_data(self, groups_to_read=None):
 
+        if groups_to_read is None:
+            groups_to_read = self.groups
         groups_to_read = [groups_to_read] if isinstance(groups_to_read,str) else groups_to_read
 
         ds_all = []
         for g in groups_to_read:
+            print(f'Reading {g}')
             ds_single = self.read_single_group(g)
             ds_all.append(ds_single)
 
@@ -781,7 +918,6 @@ class StructuredSampling(object):
 class Sampling(StructuredSampling):
     # For backward compatibility
     def __init__(self, *args, **kwargs):
-        import warnings
         warnings.warn('The Sampling class is deprecated and will be removed in future versions.'
                 ' Use StructuredSampling instead.', DeprecationWarning, stacklevel=2)
         super().__init__(*args, **kwargs)
