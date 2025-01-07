@@ -37,7 +37,7 @@ fieldlabels_default_units = {
     'u': r'u [m/s]', 'Ux': r'$u$ [m/s]',
     'v': r'v [m/s]', 'Uy': r'$v$ [m/s]',
     'w': r'Vertical wind speed [m/s]', 'Uz': r'Vertical wind speed [m/s]',
-    'theta': r'$\theta$ [K]', 'T': r'$\theta$ [K]',
+    'theta': r'$\theta$ [K]', 'T': r'$\theta$ [K]', 'θ': r'$\theta$ [K]',
     'thetav': r'$\theta_v$ [K]',
     'uu': r'$\langle u^\prime u^\prime \rangle \;[\mathrm{m^2/s^2}]$',  'UUxx': r'$\langle u^\prime u^\prime \rangle \;[\mathrm{m^2/s^2}]$',
     'vv': r'$\langle v^\prime v^\prime \rangle \;[\mathrm{m^2/s^2}]$',  'UUyy': r'$\langle v^\prime v^\prime \rangle \;[\mathrm{m^2/s^2}]$',
@@ -72,7 +72,7 @@ fieldlabels_superscript_units = {
     'u': r'u [m s$^{-1}$]', 'Ux': r'$u$ [m s$^{-1}$]',
     'v': r'v [m s$^{-1}$]', 'Uy': r'$v$ [m s$^{-1}$]',
     'w': r'Vertical wind speed [m s$^{-1}$]',    'Uz': r'Vertical wind speed [m s$^{-1}$]',
-    'theta': r'$\theta$ [K]', 'T': r'$\theta$ [K]',
+    'theta': r'$\theta$ [K]', 'T': r'$\theta$ [K]', 'θ': r'$\theta$ [K]',
     'thetav': r'$\theta_v$ [K]',
     'uu': r'$\langle u^\prime u^\prime \rangle \;[\mathrm{m^2 s^{-2}}]$',     'UUxx': r'$\langle u^\prime u^\prime \rangle \;[\mathrm{m^2 s^{-2}}]$',
     'vv': r'$\langle v^\prime v^\prime \rangle \;[\mathrm{m^2 s^{-2}}]$',     'UUyy': r'$\langle v^\prime v^\prime \rangle \;[\mathrm{m^2 s^{-2}}]$',
@@ -111,8 +111,8 @@ standard_spectrumlabels = spectrumlabels_default_units
 # Supported dimensions and associated names
 dimension_names = {
     'time':      ['datetime','time','Time','t'],
-    'height':    ['height','heights','z','zagl'],
-    'frequency': ['frequency','f',]
+    'height':    ['height','heights','z','zagl','zstag'],
+    'frequency': ['frequency','freq','f',]
 }
 
 # Show debug information
@@ -947,7 +947,10 @@ def plot_profile(datasets,
                     # Use time as label
                     if showlegend:
                         if isinstance(time, (int,float,np.number)):
-                            plotting_properties['label'] = '{:g} s'.format(time)
+                            tval = time / np.timedelta64(1,'s') \
+                                   if isinstance(time, np.timedelta64) \
+                                   else time
+                            plotting_properties['label'] = '{:g} s'.format(tval)
                         else:
                             if plot_local_time is False:
                                 plotting_properties['label'] = pd.to_datetime(time).strftime('%Y-%m-%d %H%M UTC')
@@ -1344,7 +1347,7 @@ class PlottingInput(object):
 
     def __init__(self, datasets, fields, **argd):
         # Add all arguments as class attributes
-        self.__dict__.update({'datasets':datasets,
+        self.__dict__.update({'datasets':datasets.copy(),
                               'fields':fields,
                               **argd})
 
@@ -1367,6 +1370,8 @@ class PlottingInput(object):
             # convert dataset types here
             if isinstance(df, (xr.Dataset,xr.DataArray)):
                 # handle xarray datatypes
+                if isinstance(df, xr.Dataset):
+                    df = df[self.fields]
                 self.datasets[dfname] = df.to_dataframe()
                 columns = self.datasets[dfname].columns
                 if len(columns) == 1:
