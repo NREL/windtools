@@ -254,39 +254,39 @@ class StructuredSampling(object):
 
     def _read_single_dt_native(self, pptag, group, dt):
 
-	# the line below can likely go to the object initialization (if we already know it's native)
+        # the line below can likely go to the object initialization (if we already know it's native)
         pfile = AmrexParticleFile(os.path.join(self.pppath, self.pptag+f'{dt:05}', 'particles'))
-	# Load file
+        # Load file
         pt = pfile.load(time_index=dt, label=pptag, root_dir=self.pppath, suffix='particles')
         pt.load_binary_data()
-
+        
         # Get set_id given requested group
         pt.parse_info()
         # Need to add reading of groups to parser above
         # then, get the set_id related to `group` requested
         desired_set_id = pt.info[group]
-
+        
         pt.df[pt.df['set_id'] == desired_set_id]
-
+        
         # Convert dataframe to dataset
-	x=np.unique(pt.df['xco'].values)
-	y=np.unique(pt.df['yco'].values)
-	z=np.unique(pt.df['zco'].values)
-
-	u = pt.df['velocityx'].values.reshape(len(x), len(y), len(z))
-	v = pt.df['velocityy'].values.reshape(len(x), len(y), len(z))
-	w = pt.df['velocityz'].values.reshape(len(x), len(y), len(z))
-
-	ds = xr.Dataset(
-	    data_vars=dict(
-		u=(["x", "y", "z"], u),
-		v=(["x", "y", "z"], v),
-		w=(["x", "y", "z"], w),
-	    ),
-	    coords=dict(x=("x", x), y=("y", y),z=("z", z)),
-	)
-
-	return ds
+        x=np.unique(pt.df['xco'].values)
+        y=np.unique(pt.df['yco'].values)
+        z=np.unique(pt.df['zco'].values)
+        
+        u = pt.df['velocityx'].values.reshape(len(x), len(y), len(z))
+        v = pt.df['velocityy'].values.reshape(len(x), len(y), len(z))
+        w = pt.df['velocityz'].values.reshape(len(x), len(y), len(z))
+        
+        ds = xr.Dataset(
+            data_vars=dict(
+                u=(["x", "y", "z"], u),
+                v=(["x", "y", "z"], v),
+                w=(["x", "y", "z"], w),
+            ),
+            coords=dict(x=("x", x), y=("y", y),z=("z", z)),
+        )
+        
+        return ds
 
 
     def getGroupProperties_xr(self, ds=None, group=None):
