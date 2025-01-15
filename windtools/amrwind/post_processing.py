@@ -2,8 +2,11 @@ import pandas as pd
 import xarray as xr
 import numpy as np
 import os
+import glob
+import re
 import dask.array as da
 import h5py
+import warnings
 from netCDF4 import Dataset
 
 class ABLStatistics(object):
@@ -131,20 +134,109 @@ class ABLStatistics(object):
         return self.ds.rolling(time=Navg).mean()
 
 
-class Sampling(object):
 
-    def __init__(self,fpath,start_date=None,read_data=False):
-        self.fpath = fpath
-        self.dt    = None
+class StructuredSampling(object):
+    def __init__(self, pppath):
+        '''
+        pppath: str
+            Full path to `post_processing` directory
+            
+            full path to .nc file (including extension) if netcdf sampling
+            or full path 
 
-        self.groups = self._get_groups()
+        Examples
+        ========
+
+        # read netcdf
+        s = StructuredSampling('/path/to/post_processing')
+        s.read_single_group(pptag='box_lr',group='Low',file='box_lr00100.nc',itime=0, ftime=4)
+
+        # read native
+        s = StructuredSampling('/path/to/post_processing')
+        s.read_single_group(pptag='box_lr',group='Low',itime=0, ftime=4)
+
+        # read netcdf backward compatible
+        s = StructuredSampling('/path/to/post_processing/box_lr00100.nc'')
+        s.read_single_group(group='Low',itime=0,ftime=4)
+
+        '''
+        self.pppath = pppath
+
+        # Support backward compatibility
+        self._support_backwards_netcdf()
         
-        if read_data:
-            self.read_data(groups_to_read = self.groups)
+        if not os.path.exists(self.pppath):
+            raise ValueError(f"The path provided does not exist")
+
+        if not os.path.isdir(self.pppath):
+            raise ValueError(f"The path provided is not a path")
+
+
 
     def __repr__(self):
-        header=f'Following groups sampled:\n'
-        return header+''.join([f'    {g}\n' for g in self.groups])
+        def _info_string(self):
+
+            s = ''
+
+            if self.samplingformat == 'netcdf':
+                s += 'Sampling performed using NetCDF.\n'
+            elif self.samplingformat == 'native':
+                s += 'Sampling performed using native particles.\n'
+
+            formatted_groups = ', '.join([f'{g}' for g in self.groups])
+            s += f'Groups available: {formatted_groups}\n'
+
+            return s
+        return _info_string()
+
+
+    def _support_backwards_netcdf(self):
+        '''
+        Helper for input handling to support backward compatibility
+
+        Example: if input is /full/path/to/post_processing/box_hr00106.nc, then
+        we need to have
+          - pppath: /full/path/to/post_processing
+          - pptag: box_hr
+          - file: box_hr00106.nc
+
+        '''
+
+        if not os.path.isfile(self.pppath) and not self.pppath[-3:].lower()=='.nc':
+            return
+
+        warnings.warn('This method of reading the sampling is deprecated and will be'
+                      'removed in future versions.', DeprecationWarning, stacklevel=2)
+
+        # Get the filename:
+        self.file = os.path.basename(self.pppath)
+        # Get the pppath directory name
+        self.pppath = os.path.dirname(self.pppath)
+        # Get the pptag:
+        self.pptag = re.match(r'([a-zA-Z_]+)\d+', self.file).group(1) if re.match(r'([a-zA-Z_]+)\d+', self.file) else None
+
+
+    def _get_unique_pp_tags_native(self):
+        '''
+        Get all unique post processing tags.
+        Post processing tags are the strings that go into `incflow.post_processing`
+        Example return: ['box_hr', 'box_lr']
+        '''
+
+        # Get all files/directories
+        fullpaths = glob.glob(os.path.join(self.pppath, '*'))
+        self.allfiles = [os.path.basename(p) for p in fullpaths]
+
+        # Remove the time step info
+        basenames = [re.match(r'([a-zA-Z_]+)\d+', file).group(1)
+                     for file in self.allfiles if re.match(r'([a-zA-Z_]+)\d+', file)]
+
+        # Get unique values that have 4 or more directories (thus excluding abl_statistics, etc)
+        strings, count = np.unique(basenames, return_counts=True)
+        self.all_available_pp_tags = strings[count>=4]
+
+        if self.verbose:
+            print(f'Native format: unique post-processing tags found: {self.all_available_pp_tags}')
 
 
     def getGroupProperties_xr(self, ds=None, group=None):
@@ -178,7 +270,6 @@ class Sampling(object):
         if ds is None and group is not None:
             ds = h5py.File(self.fpath)[group]
 
-
         # Get axes
         self.x = np.sort(np.unique(ds['coordinates'][()][:,0]))
         self.y = np.sort(np.unique(ds['coordinates'][()][:,1]))
@@ -195,44 +286,196 @@ class Sampling(object):
         self.tdf = self.ndt-1
 
 
-    def _get_groups(self):
-        with Dataset(self.fpath) as f:
-            groups = list(f.groups.keys())
-        groups = [groups] if isinstance(groups,str) else groups
-        return groups
+    def read_single_group(self, group, itime, ftime, step=1, file=None, pptag=None, outputPath=None, simCompleted=False,
+                          var=['velocityx','velocityy','velocityz'], verbose=False, package='xr'):
+        '''
+        Reads a single group of data in either netcdf or native format.
+        Supports backwards compatibility and identify sampling method used.
+
+        Inputs:
+        -------
+        group: str
+            The group to read data from. E.g. 'HighT1_inflow0deg'
+        itime, ftime: int
+            Starting and ending time index to read data
+        step: int
+            Steps to read the data. 1 for all data, 2 for every other, etc
+        file: str, optional
+            Filename for netcdf format. E.g. 'box_hr00100.nc'
+        pptag: str, optional
+            Prefix tag for native format. E.g. 'bix_hr'
 
 
-    def set_dt(self, dt):
-        self.dt = dt
+        Example:
+        --------
+        # Read data in netcdf format
+        s = StructuredSampling('/path/to/post_processing')
+        s.read_single_group(pptag='box_lr',group='Low',file='box_lr00100.nc',itime=0, ftime=4)
 
-    def read_data(self, groups_to_read):
+        # Read data in native format
+        s = StructuredSampling('/path/to/post_processing')
+        s.read_single_group(pptag='box_lr',group='Low',itime=0, ftime=4)
 
-        groups_to_read = groups_to_read if isinstance(groups_to_read,str) else groups_to_read
+        # Read data in netcdf format (backward compatible; old format)
+        s = StructuredSampling('/path/to/post_processing/box_lr00100.nc'')
+        s.read_single_group('Low',itime=0,ftime=4)
 
-        ds_all = []
-        for g in groups_to_read:
-            ds_single = read_single_group(g)
-            ds_all.append(ds_single)
+        '''
 
-        return ds_all
+        self.verbose=verbose
 
-    def read_single_group(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz'], simCompleted=False, verbose=False, package='xr'):
+        if not isinstance(group, str):
+            raise ValueError(f'group should be a string. Received {group}.')
 
-        if package == 'xr':
-            print(f'Reading single group using xarray. This will take longer and require more RAM')
-            ds = self.read_single_group_xr(group, itime, ftime, step, outputPath, var, simCompleted, verbose)
-        elif package == 'h5py':
-            print(f'Reading single group using h5py. This is fast, but future computations might be slow')
-            ds = self.read_single_group_h5py(group, itime, ftime, step, outputPath, var, simCompleted, verbose)
+        if file and pptag:
+            self.samplingformat = 'netcdf'
+            self.file = file
+            self.pptag = pptag
+        elif not file and not pptag:
+            self.samplingformat = 'netcdf_legacy'
+        elif not file and pptag:
+            self.samplingformat = 'native'
+            self.pptag = pptag
         else:
-            raise ValueError('Package can only be `h5py` or `xr`.')
+            raise ValueError(f'Provided file, but not pptag. Unknown format.')
+
+
+        if self.samplingformat == 'netcdf_legacy':
+            if self.verbose: print(f"Reading netcdf data (legacy). file: {self.file}, group: {group}, itime: {itime}, ftime: {ftime}")
+            self._prepare_to_read_netcdf_legacy()
+            ds = self.read_single_group_netcdf(group, itime, ftime, step, outputPath, var, simCompleted, verbose, package)
+
+          
+        elif self.samplingformat == 'netcdf':
+            if self.verbose: print(f"Reading netcdf data (new). file: {self.file}, tag: {self.pptag}, group: {group}, itime: {itime}, ftime: {ftime}")
+            self._prepare_to_read_netcdf()
+            ds = self.read_single_group_netcdf(group, itime, ftime, step, outputPath, var, simCompleted, verbose, package)
+
+
+        elif self.samplingformat == 'native':
+            if self.verbose: print(f"Reading native data. tag: {self.pptag}, group: {group}, itime: {itime}, ftime: {ftime}")
+            self._prepare_to_read_native()
+            ds = self.read_single_group_native(group, itime, ftime, step, outputPath, var) 
+
+        return ds
+
+
+    def _prepare_to_read_netcdf_legacy(self):
+
+        self.fpath = os.path.join(self.pppath, self.file)
+
+
+    def _prepare_to_read_netcdf(self):
+
+        self.fpath = os.path.join(self.pppath, self.file)
+        if not os.path.exists(self.fpath):
+            raise FileNotFoundError(f"The specified file does not exist: {filepath}")
+
+
+    def _prepare_to_read_native(self):
+
+        # Get all available tags and check if the requested one exists
+        self._get_unique_pp_tags_native()
+        if self.pptag not in self.all_available_pp_tags:
+            raise ValueError(f'Requested tag {self.pptag} not available. Available tags are: {self.all_available_pp_tags}.')
+
+
+
+
+    def read_single_group_native(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz']):
+
+
+        if isinstance(var,str): var = [var]
+        if var==['all']:
+            self.reqvars = ['velocityx','velocityy','velocityz','temperature','tke']
+        else:
+            self.reqvars = var
+
+
+        # Find all time indexes between requested range
+        all_times = [int(f.replace(self.pptag, "")) for f in self.allfiles if f.startswith(self.pptag)]
+        all_times.sort()
+        if ftime == -1:
+            ftime = all_times[-1]
+        available_time_indexes = [n for n in all_times if itime <= n <= ftime]
+
+        # Apply the step value
+        desired_time_indexes = available_time_indexes[::step]
+        if self.verbose: print(f'Reading the following time indexes: {desired_time_indexes}')
+
+        ds = []
+        for i, dt in enumerate(desired_time_indexes):
+            print(f'Reading time index {dt}')
+            ds.append(self._read_single_dt_native(group, dt))
+        ds = xr.concat(ds, dim='samplingtimestep')
 
         return ds
 
 
 
 
-    def read_single_group_h5py(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz'], simCompleted=False, verbose=False):
+    def _read_single_dt_native(self, group, time_index):
+        '''
+        Read a single time step of the previously-specified tag
+        '''
+        from .amrex_particle import AmrexParticleFile 
+
+        # Open the AMReX particle file and read it
+        self.pfile = AmrexParticleFile(os.path.join(self.pppath, self.pptag+f'{time_index:05}', 'particles'))
+        self.pfile.load(root_dir=self.pppath, time_index=time_index, label=self.pptag)
+        df = self.pfile()
+
+        # Now look for the correspondence between the requested tag and the label index read as info
+        number_of_entries_before_groups = 2 # Update this as AMR-Winds gets updated with more information
+        all_available_groups = list(self.pfile.info.keys())[number_of_entries_before_groups:]
+        try:
+            desired_set_id = self.pfile.info[group]
+        except KeyError:
+            raise ValueError(f'Requested group {group} not found. Available groups: {all_available_groups}')
+
+        # Slice the data and re-format
+        df = df[df['set_id'] == desired_set_id]
+
+        x=np.unique(df['xco'].values)
+        y=np.unique(df['yco'].values)
+        z=np.unique(df['zco'].values)
+        u = df['velocityx'].values.reshape(len(x), len(y), len(z))
+        v = df['velocityy'].values.reshape(len(x), len(y), len(z))
+        w = df['velocityz'].values.reshape(len(x), len(y), len(z))
+        
+        ds = xr.Dataset(
+            data_vars=dict(
+                u=(["x", "y", "z"], u),
+                v=(["x", "y", "z"], v),
+                w=(["x", "y", "z"], w),
+            ),
+            coords=dict(x=("x", x), y=("y", y),z=("z", z))
+        )
+
+        # Add time index info
+        ds = ds.expand_dims('samplingtimestep', axis=-1).assign_coords({'samplingtimestep': [time_index]})
+        
+        return ds
+
+
+
+    def read_single_group_netcdf(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz'], simCompleted=False, verbose=False, package='xr'):
+
+        if package == 'xr':
+            print(f'Reading single group using xarray. This will take longer and require more RAM')
+            ds = self.read_single_group_netcdf_xr(group, itime, ftime, step, outputPath, var, simCompleted, verbose)
+        elif package == 'h5py':
+            print(f'Reading single group using h5py. This is fast, but future computations might be slow')
+            ds = self.read_single_group_netcdf_h5py(group, itime, ftime, step, outputPath, var, simCompleted, verbose)
+        else:
+            raise ValueError('For netcdf, package can only be `h5py` or `xr`.')
+
+        return ds
+
+
+
+
+    def read_single_group_netcdf_h5py(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz'], simCompleted=False, verbose=False):
         '''
 
         step: int
@@ -288,7 +531,7 @@ class Sampling(object):
 
 
 
-    def read_single_group_xr(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz'], simCompleted=False, verbose=False):
+    def read_single_group_netcdf_xr(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz'], simCompleted=False, verbose=False):
         
         if simCompleted:
             dsraw = xr.open_dataset(self.fpath, group=group, engine='netcdf4')
@@ -309,9 +552,9 @@ class Sampling(object):
         elif self.sampling_type == 'LidarSampler':
             ds = self._read_lidar_sampler(dsraw)
         elif self.sampling_type == 'PlaneSampler':
-            ds = self._read_plane_sampler_xr(dsraw, group, itime, ftime, step, outputPath, verbose)
+            ds = self._read_plane_sampler_netcdf_xr(dsraw, group, itime, ftime, step, outputPath, verbose)
         elif self.sampling_type == 'ProbeSampler':
-            ds = self._read_probe_sampler(dsraw, group, itime, ftime, step, outputPath, verbose)
+            ds = self._read_probe_netcdf_sampler(dsraw, group, itime, ftime, step, outputPath, verbose)
         else:
             raise ValueError(f'Stopping. Sampling type {self.sampling_type} not recognized')
 
@@ -326,7 +569,7 @@ class Sampling(object):
 
 
 
-    def _read_plane_sampler_h5py(self, ds, group, itime, ftime, step, outputPath, verbose):
+    def _read_plane_sampler_netcdf_h5py(self, ds, group, itime, ftime, step, outputPath, verbose):
 
         if ftime == -1:
             ftime = self.ndt
@@ -405,7 +648,7 @@ class Sampling(object):
 
 
 
-    def _read_plane_sampler_xr(self, ds, group, itime, ftime, step, outputPath, verbose):
+    def _read_plane_sampler_netcdf_xr(self, ds, group, itime, ftime, step, outputPath, verbose):
 
         if ftime == -1:
             ftime = self.ndt
@@ -492,7 +735,7 @@ class Sampling(object):
         return new_all
 
 
-    def _read_nonaligned_plane_sampler_xr(self, ds):
+    def _read_nonaligned_plane_sampler_netcdf_xr(self, ds):
         print(f"")
         print(f"| ----------------------------- WARNING ----------------------------- |")
         print(f'|  - Unknown normal plane. Guessing the order of the dimensions       |')
@@ -580,7 +823,7 @@ class Sampling(object):
 
 
 
-    def _read_probe_sampler(self, ds, group, itime, ftime, step, outputPath, verbose):
+    def _read_probe_sampler_netcdf(self, ds, group, itime, ftime, step, outputPath, verbose):
         '''
         Reads in generic sampler. This function is still specific for terrain-following slices
         where the coordinates x and y are in a grid. If that isn't the case, it will fail.
@@ -652,6 +895,25 @@ class Sampling(object):
 
 
 
+    def set_dt(self, dt):
+        self.dt = dt
+
+    #def read_data(self, groups_to_read=None):
+
+    #    if groups_to_read is None:
+    #        groups_to_read = self.groups
+    #    groups_to_read = [groups_to_read] if isinstance(groups_to_read,str) else groups_to_read
+
+    #    ds_all = []
+    #    for g in groups_to_read:
+    #        print(f'Reading {g}')
+    #        ds_single = self.read_single_group(group=g)
+    #        ds_all.append(ds_single)
+
+    #    return ds_all
+
+
+
     def to_vtk(self, dsOrGroup, outputPath, verbose=True, offsetz=0, itime_i=0, itime_f=-1, t0=None, dt=None, vtkstartind=0, terrain=False):
         '''
         Writes VTKs for all time stamps present in ds
@@ -703,7 +965,7 @@ class Sampling(object):
             zarray = ds.z
         else:
             if verbose: print(f'    Reading group {dsOrGroup}, from sampling time step {itime_i} to {itime_f}...', flush=True)
-            ds = self.read_single_group(dsOrGroup, itime=itime_i, ftime=itime_f, outputPath=None,
+            ds = self.read_single_group(group=dsOrGroup, itime=itime_i, ftime=itime_f, outputPath=None,
                                         simCompleted=True, verbose=verbose, var=var)
             if verbose: print(f'    Done reading group {dsOrGroup}, from sampling time steps above.', flush=True)
             ndt = len(ds.samplingtimestep)  # rt mar13: I had ds.num_time_steps here, but it kept crashing 
@@ -777,6 +1039,15 @@ class Sampling(object):
 
         return ds
 
+
+class Sampling(StructuredSampling):
+    # For backward compatibility
+    def __init__(self, *args, **kwargs):
+        warnings.warn('The Sampling class is deprecated and will be removed in future versions.'
+                ' Use StructuredSampling instead.', DeprecationWarning, stacklevel=2)
+        super().__init__(*args, **kwargs)
+
+
 def addDatetime(ds,dt,origin=pd.to_datetime('2000-01-01 00:00:00'), computemean=True):
     '''
     Add temporal means to dataset. Means are computed for every spatial location
@@ -817,3 +1088,4 @@ def addDatetime(ds,dt,origin=pd.to_datetime('2000-01-01 00:00:00'), computemean=
         ds['wp'] = ds['w'] - meanw
 
     return ds
+
