@@ -940,7 +940,58 @@ class StructuredSampling(object):
         self.dt = dt
 
 
-    def to_vtk(self, dsOrGroup, outputPath, verbose=True, offsetz=0, itime_i=0, itime_f=-1, t0=None, dt=None, vtkstartind=0, terrain=False):
+    def to_vtk_par(self, group, outputPath, file=None, pptag=None, verbose=True, offsetz=0, itime_i=0, itime_f=-1, t0=None, dt=None, vtkstartind=0, terrain=False, ncores=None):
+        '''
+        For native only. This method is intended to be used within a Jupyter Notebook. For proper parallelization
+        of the saving of the VTKs, use `postprocess_amr_boxes2vtk.py`.
+        '''
+
+        import multiprocessing
+        from itertools import repeat
+
+        if ncores is None:
+            ncores = multiprocessing.cpu_count()
+
+        # Redefine some variables as the user might call just this method
+        self.verbose = verbose
+        self.pptag = pptag
+        self.get_all_times_native()
+        if itime_f == -1:
+            itime_f = self.all_times[-1]
+        available_time_indexes = [n for n in self.all_times if itime_i <= n <= itime_f]
+        chunks =  np.array_split(available_time_indexes, ncores)
+        
+        # Split all the time steps in arrays of roughly the same size (for netcdf)
+        #chunks =  np.array_split(range(itime_i,itime_f), ncores)
+
+        # Get rid of the empty chunks (happens when the number of boxes is lower than 96)
+        chunks = [c for c in chunks if c.size > 0]
+        # Now, get the beginning and end of each separate chunk
+        itime_i_list = [i[0]    for i in chunks]
+        itime_f_list = [i[-1]+1 for i in chunks]
+
+        if __name__ == 'windtools.amrwind.post_processing':
+            pool = multiprocessing.Pool(processes=ncores)
+            _ = pool.starmap(self.to_vtk, zip(repeat(group),           # dsOrGroup
+                                              repeat(outputPath),      # outputPath
+                                              repeat(file),            # file
+                                              repeat(pptag),           # pptag
+                                              repeat(verbose),         # verbose
+                                              repeat(offsetz),         # offset in z
+                                              itime_i_list,            # itime_i
+                                              itime_f_list,            # itime_f
+                                              repeat(t0),              # t0
+                                              repeat(dt),              # dt
+                                              repeat(vtkstartind),     # vtkstartind
+                                              repeat(terrain)          # terrain
+                                             )
+                                          )
+            pool.close()
+            pool.join()
+
+
+
+    def to_vtk(self, dsOrGroup, outputPath, file=None, pptag=None, verbose=True, offsetz=0, itime_i=0, itime_f=-1, t0=None, dt=None, vtkstartind=0, terrain=False):
         '''
         Writes VTKs for all time stamps present in ds
 
@@ -955,7 +1006,7 @@ class StructuredSampling(object):
         offsetz: scalar
             Offset in the z direction, used to make sure both high- and low-res boxes have a point in the
             desired height. It is needed, e.g., when there is a cell edge at 150, and cell center at 145,
-            and we are interested in having a cell center at 150. Thisvariable simply shifts everything
+            and we are interested in having a cell center at 150. This variable simply shifts everything
             by offsetz, leaving us with points in the height we want. On 10-m grid, offsetz=5 for hh=150;
             and on a 2.5m grid, offsetz=1.25 for hh=150m. It is typically the origin in z for AMR-Wind
             sampling.
