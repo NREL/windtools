@@ -140,9 +140,9 @@ class StructuredSampling(object):
         '''
         pppath: str
             Full path to `post_processing` directory
-            
-            full path to .nc file (including extension) if netcdf sampling
-            or full path 
+        
+        Note: Supports legacy specification format of full path to .nc
+              file (including extension) if netcdf sampling 
 
         Examples
         ========
@@ -155,7 +155,7 @@ class StructuredSampling(object):
         s = StructuredSampling('/path/to/post_processing')
         s.read_single_group(pptag='box_lr',group='Low',itime=0, ftime=4)
 
-        # read netcdf backward compatible
+        # read netcdf legacy input format (backward compatible)
         s = StructuredSampling('/path/to/post_processing/box_lr00100.nc'')
         s.read_single_group(group='Low',itime=0,ftime=4)
 
@@ -170,24 +170,6 @@ class StructuredSampling(object):
 
         if not os.path.isdir(self.pppath):
             raise ValueError(f"The path provided is not a path")
-
-
-
-    def __repr__(self):
-        def _info_string(self):
-
-            s = ''
-
-            if self.samplingformat == 'netcdf':
-                s += 'Sampling performed using NetCDF.\n'
-            elif self.samplingformat == 'native':
-                s += 'Sampling performed using native particles.\n'
-
-            formatted_groups = ', '.join([f'{g}' for g in self.groups])
-            s += f'Groups available: {formatted_groups}\n'
-
-            return s
-        return _info_string()
 
 
     def _support_backwards_netcdf(self):
@@ -235,8 +217,60 @@ class StructuredSampling(object):
         strings, count = np.unique(basenames, return_counts=True)
         self.all_available_pp_tags = strings[count>=4]
 
-        if self.verbose:
-            print(f'Native format: unique post-processing tags found: {self.all_available_pp_tags}')
+        #if self.verbose:
+        #    print(f'Native format: unique post-processing tags found: {self.all_available_pp_tags}')
+
+
+    def getGroupProperties(self, ds=None, group=None, package=None):
+
+        if ds is None and group is None:
+            raise ValueError(f'Either `ds` or `group` must be specified')
+
+        if self.samplingformat == 'netcdf_legacy' or self.samplingformat == 'netcdf':
+            if package == 'xr':
+                self.getGroupProperties_xr(ds, group)
+            elif package == 'h5py':
+                self.getGroupProperties_h5py(ds, group)
+          
+        elif self.samplingformat == 'native':
+            self.getGroupProperties_native(ds, group)
+
+
+    def getGroupProperties_native(self, df, group):
+
+        # Get all tags and all times available
+        #self._get_unique_pp_tags_native()
+
+        all_times = [int(f.replace(self.pptag, "")) for f in self.allfiles if f.startswith(self.pptag)]
+        all_times.sort()
+        #if ftime == -1:
+        #    ftime = all_times[-1]
+
+        # Re-format the info dict for convenience
+        self.info = {item['label']:item for item in self.pfile.info["samplers"]}
+        #ngroups = len(self.info)
+
+        # Get sampling type
+        self.sampling_type = self.info[group]['type']
+
+        # Now look for the correspondence between the requested tag and the label index read as info
+        self.all_available_groups = list(self.info.keys())
+
+        try:
+            self.desired_set_id = self.info[group]['index']
+        except KeyError:
+            raise ValueError(f'Requested group {group} not found. Available groups: {self.all_available_groups}')
+
+        # Slice the data and get axes info
+        df = df[df['set_id'] == self.desired_set_id]
+
+        # Get axes
+        self.x=np.unique(df['xco'].values)
+        self.y=np.unique(df['yco'].values)
+        self.z=np.unique(df['zco'].values)
+        self.nx = len(self.x)
+        self.ny = len(self.y)
+        self.nz = len(self.z)
 
 
     def getGroupProperties_xr(self, ds=None, group=None):
@@ -339,18 +373,15 @@ class StructuredSampling(object):
         else:
             raise ValueError(f'Provided file, but not pptag. Unknown format.')
 
-
         if self.samplingformat == 'netcdf_legacy':
             if self.verbose: print(f"Reading netcdf data (legacy). file: {self.file}, group: {group}, itime: {itime}, ftime: {ftime}")
             self._prepare_to_read_netcdf_legacy()
             ds = self.read_single_group_netcdf(group, itime, ftime, step, outputPath, var, simCompleted, verbose, package)
-
           
         elif self.samplingformat == 'netcdf':
             if self.verbose: print(f"Reading netcdf data (new). file: {self.file}, tag: {self.pptag}, group: {group}, itime: {itime}, ftime: {ftime}")
             self._prepare_to_read_netcdf()
             ds = self.read_single_group_netcdf(group, itime, ftime, step, outputPath, var, simCompleted, verbose, package)
-
 
         elif self.samplingformat == 'native':
             if self.verbose: print(f"Reading native data. tag: {self.pptag}, group: {group}, itime: {itime}, ftime: {ftime}")
@@ -361,29 +392,31 @@ class StructuredSampling(object):
 
 
     def _prepare_to_read_netcdf_legacy(self):
-
         self.fpath = os.path.join(self.pppath, self.file)
 
 
     def _prepare_to_read_netcdf(self):
-
         self.fpath = os.path.join(self.pppath, self.file)
         if not os.path.exists(self.fpath):
             raise FileNotFoundError(f"The specified file does not exist: {filepath}")
 
 
     def _prepare_to_read_native(self):
-
         # Get all available tags and check if the requested one exists
         self._get_unique_pp_tags_native()
         if self.pptag not in self.all_available_pp_tags:
             raise ValueError(f'Requested tag {self.pptag} not available. Available tags are: {self.all_available_pp_tags}.')
 
+    def get_all_times_native(self):
+        self._prepare_to_read_native()
+
+        all_times = [int(f.replace(self.pptag, "")) for f in self.allfiles if f.startswith(self.pptag)]
+        all_times.sort()
+        self.all_times = all_times
 
 
 
     def read_single_group_native(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz']):
-
 
         if isinstance(var,str): var = [var]
         if var==['all']:
@@ -391,27 +424,47 @@ class StructuredSampling(object):
         else:
             self.reqvars = var
 
-
         # Find all time indexes between requested range
-        all_times = [int(f.replace(self.pptag, "")) for f in self.allfiles if f.startswith(self.pptag)]
-        all_times.sort()
+        #all_times = [int(f.replace(self.pptag, "")) for f in self.allfiles if f.startswith(self.pptag)]
+        #all_times.sort()
+        self.get_all_times_native()
         if ftime == -1:
-            ftime = all_times[-1]
-        available_time_indexes = [n for n in all_times if itime <= n <= ftime]
+            ftime = self.all_times[-1]
+        available_time_indexes = [n for n in self.all_times if itime <= n <= ftime]
 
         # Apply the step value
         desired_time_indexes = available_time_indexes[::step]
         if self.verbose: print(f'Reading the following time indexes: {desired_time_indexes}')
 
+        #self.all_times = all_times
+        self.available_time_indexes = available_time_indexes
+
+        # Build the equivalent samplingtimestep array. We need to identify what would be itime=0 so that
+        # the resulting array is equivalent to netcdf sampling
+        itime_ref = self.all_times.index(available_time_indexes[0])
+        samplingtimestep = np.arange(itime_ref,itime_ref+len(available_time_indexes),step)
+        #print(f'samplingtimestep is {samplingtimestep}')
+
         ds = []
         for i, dt in enumerate(desired_time_indexes):
             print(f'Reading time index {dt}')
-            ds.append(self._read_single_dt_native(group, dt))
+            curr_ds = self._read_single_dt_native(group, dt)
+            curr_ds = curr_ds.expand_dims('samplingtimestep', axis=-1).assign_coords({'samplingtimestep': [samplingtimestep[i]]})
+            ds.append(curr_ds)
         ds = xr.concat(ds, dim='samplingtimestep')
 
+        # Add time index info. For native, the time_index is the actual AMR-Wind time step index, while
+        # for netcdf it is the sampling index. For example, if AMR-Wind dt=1, and output is saved at 
+        # every 2 seconds starting at 10s, for native we will have time_indexes as 10, 12, 14, etc. For
+        # netcdf sampling we do not have the underlying AMR-Wind time step index information, only how 
+        # many time steps were saved per .nc file. For netcdf, then, we assign a `samplingtimestep` value
+        # to each of the samplings. So in the example given, for netcdf we would have 0, 2, 4, etc. In
+        # our case here, we want to create a `samplingtimestep` that is equivalent to the approach taken
+        # with netcdf sampling so that both methods are equivalent. We retain the amrwind_dt_index for 
+        # native sampling.
+        ds['amrwind_dt_index'] = (('samplingtimestep'), desired_time_indexes)
+
         return ds
-
-
 
 
     def _read_single_dt_native(self, group, time_index):
@@ -425,23 +478,34 @@ class StructuredSampling(object):
         self.pfile.load(root_dir=self.pppath, time_index=time_index, label=self.pptag)
         df = self.pfile()
 
+        # Get group properties
+        self.getGroupProperties_native(df, group)
+
+        # Re-format the info dict for convenience
+        #self.info = {item['label']:item for item in self.pfile.info["samplers"]}
+        #ngroups = len(self.info)
+
         # Now look for the correspondence between the requested tag and the label index read as info
-        number_of_entries_before_groups = 2 # Update this as AMR-Winds gets updated with more information
-        all_available_groups = list(self.pfile.info.keys())[number_of_entries_before_groups:]
-        try:
-            desired_set_id = self.pfile.info[group]
-        except KeyError:
-            raise ValueError(f'Requested group {group} not found. Available groups: {all_available_groups}')
+        #self.all_available_groups = list(self.info.keys())
+
+        #try:
+        #    desired_set_id = self.info[group]['index']
+        #except KeyError:
+        #    raise ValueError(f'Requested group {group} not found. Available groups: {self.all_available_groups}')
 
         # Slice the data and re-format
-        df = df[df['set_id'] == desired_set_id]
+        df = df[df['set_id'] == self.desired_set_id]
 
-        x=np.unique(df['xco'].values)
-        y=np.unique(df['yco'].values)
-        z=np.unique(df['zco'].values)
-        u = df['velocityx'].values.reshape(len(x), len(y), len(z))
-        v = df['velocityy'].values.reshape(len(x), len(y), len(z))
-        w = df['velocityz'].values.reshape(len(x), len(y), len(z))
+        #self.x=np.unique(df['xco'].values)
+        #self.y=np.unique(df['yco'].values)
+        #self.z=np.unique(df['zco'].values)
+        #self.nx = len(self.x)
+        #self.ny = len(self.y)
+        #self.nz = len(self.z)
+
+        u = df['velocityx'].values.reshape(self.nx, self.ny, self.nz)
+        v = df['velocityy'].values.reshape(self.nx, self.ny, self.nz)
+        w = df['velocityz'].values.reshape(self.nx, self.ny, self.nz)
         
         ds = xr.Dataset(
             data_vars=dict(
@@ -449,14 +513,10 @@ class StructuredSampling(object):
                 v=(["x", "y", "z"], v),
                 w=(["x", "y", "z"], w),
             ),
-            coords=dict(x=("x", x), y=("y", y),z=("z", z))
+            coords=dict(x=("x", self.x), y=("y", self.y),z=("z", self.z))
         )
 
-        # Add time index info
-        ds = ds.expand_dims('samplingtimestep', axis=-1).assign_coords({'samplingtimestep': [time_index]})
-        
         return ds
-
 
 
     def read_single_group_netcdf(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz'], simCompleted=False, verbose=False, package='xr'):
@@ -471,8 +531,6 @@ class StructuredSampling(object):
             raise ValueError('For netcdf, package can only be `h5py` or `xr`.')
 
         return ds
-
-
 
 
     def read_single_group_netcdf_h5py(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz'], simCompleted=False, verbose=False):
@@ -506,7 +564,6 @@ class StructuredSampling(object):
         else:
             raise ValueError('Unclear if loading the data on a running sim works with h5py. Proceed with caution.')
 
-
         if isinstance(var,str): var = [var]
         if var==['all']:
             self.reqvars = ['velocityx','velocityy','velocityz','temperature','tke']
@@ -529,15 +586,12 @@ class StructuredSampling(object):
         return ds
 
 
-
-
     def read_single_group_netcdf_xr(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz'], simCompleted=False, verbose=False):
         
         if simCompleted:
             dsraw = xr.open_dataset(self.fpath, group=group, engine='netcdf4')
         else:
             dsraw = xr.load_dataset(self.fpath, group=group, engine='netcdf4')
-
 
         if isinstance(var,str): var = [var]
         if var==['all']:
@@ -564,9 +618,9 @@ class StructuredSampling(object):
     def _read_line_sampler(self,ds):
         raise NotImplementedError(f'Sampling `LineSampler` is not implemented. Consider implementing it..')
 
+
     def _read_lidar_sampler(self,ds):
         raise NotImplementedError(f'Sampling `LidarSampler` is not implemented. Consider implementing it.')
-
 
 
     def _read_plane_sampler_netcdf_h5py(self, ds, group, itime, ftime, step, outputPath, verbose):
@@ -646,15 +700,12 @@ class StructuredSampling(object):
         return new_all
 
 
-
-
     def _read_plane_sampler_netcdf_xr(self, ds, group, itime, ftime, step, outputPath, verbose):
 
         if ftime == -1:
             ftime = self.ndt
 
         # Get velocity info (regardless if asked for)
-
         # Unformatted arrays
         velx_old_all = ds['velocityx'].isel(num_time_steps=slice(itime, ftime, step)).values
         vely_old_all = ds['velocityy'].isel(num_time_steps=slice(itime, ftime, step)).values
@@ -689,10 +740,6 @@ class StructuredSampling(object):
         new_all = new_all.to_dataset(name='u')
         new_all['v'] = (ordereddims, vely_all)
         new_all['w'] = (ordereddims, velz_all)
-
-
-
-
 
         print(f'The following variables are available in this dataset: {list(ds.keys())}')
 
@@ -816,11 +863,7 @@ class StructuredSampling(object):
         self.x = np.linspace(0,(self.nx-1)*res_guess,self.nx)
         self.y = np.linspace(0,(self.ny-1)*res_guess,self.ny)
         self.z = [0]
-        
         print(f"| ------------------------------------------------------------------- |")
-
-
-
 
 
     def _read_probe_sampler_netcdf(self, ds, group, itime, ftime, step, outputPath, verbose):
@@ -879,7 +922,6 @@ class StructuredSampling(object):
         ds_new["samplingheight"] = (["x", "y"], z_reshaped)
         ds_new = ds_new.rename_vars({'velocityx':'u', 'velocityy':'v', 'velocityz':'w'})
 
-
         if outputPath is not None:
             if outputPath.endswith('.zarr'):
                 print(f'Saving {outputPath}')
@@ -894,27 +936,62 @@ class StructuredSampling(object):
         return ds_new
 
 
-
     def set_dt(self, dt):
         self.dt = dt
 
-    #def read_data(self, groups_to_read=None):
 
-    #    if groups_to_read is None:
-    #        groups_to_read = self.groups
-    #    groups_to_read = [groups_to_read] if isinstance(groups_to_read,str) else groups_to_read
+    def to_vtk_par(self, group, outputPath, file=None, pptag=None, verbose=True, offsetz=0, itime_i=0, itime_f=-1, t0=None, dt=None, vtkstartind=0, terrain=False, ncores=None):
+        '''
+        For native only. This method is intended to be used within a Jupyter Notebook. For proper parallelization
+        of the saving of the VTKs, use `postprocess_amr_boxes2vtk.py`.
+        '''
 
-    #    ds_all = []
-    #    for g in groups_to_read:
-    #        print(f'Reading {g}')
-    #        ds_single = self.read_single_group(group=g)
-    #        ds_all.append(ds_single)
+        import multiprocessing
+        from itertools import repeat
 
-    #    return ds_all
+        if ncores is None:
+            ncores = multiprocessing.cpu_count()
+
+        # Redefine some variables as the user might call just this method
+        self.verbose = verbose
+        self.pptag = pptag
+        self.get_all_times_native()
+        if itime_f == -1:
+            itime_f = self.all_times[-1]
+        available_time_indexes = [n for n in self.all_times if itime_i <= n <= itime_f]
+        chunks =  np.array_split(available_time_indexes, ncores)
+        
+        # Split all the time steps in arrays of roughly the same size (for netcdf)
+        #chunks =  np.array_split(range(itime_i,itime_f), ncores)
+
+        # Get rid of the empty chunks (happens when the number of boxes is lower than 96)
+        chunks = [c for c in chunks if c.size > 0]
+        # Now, get the beginning and end of each separate chunk
+        itime_i_list = [i[0]    for i in chunks]
+        itime_f_list = [i[-1]+1 for i in chunks]
+
+        if __name__ == 'windtools.amrwind.post_processing':
+            pool = multiprocessing.Pool(processes=ncores)
+            _ = pool.starmap(self.to_vtk, zip(repeat(group),           # dsOrGroup
+                                              repeat(outputPath),      # outputPath
+                                              repeat(file),            # file
+                                              repeat(pptag),           # pptag
+                                              repeat(verbose),         # verbose
+                                              repeat(offsetz),         # offset in z
+                                              itime_i_list,            # itime_i
+                                              itime_f_list,            # itime_f
+                                              repeat(t0),              # t0
+                                              repeat(dt),              # dt
+                                              repeat(vtkstartind),     # vtkstartind
+                                              repeat(terrain)          # terrain
+                                             )
+                                          )
+            pool.close()
+            pool.join()
 
 
 
-    def to_vtk(self, dsOrGroup, outputPath, verbose=True, offsetz=0, itime_i=0, itime_f=-1, t0=None, dt=None, vtkstartind=0, terrain=False):
+    def to_vtk(self, dsOrGroup, outputPath, file=None, pptag=None, verbose=True, offsetz=0, itime_i=0, itime_f=-1, t0=None, dt=None, vtkstartind=0, terrain=False):
         '''
         Writes VTKs for all time stamps present in ds
 
@@ -924,6 +1001,8 @@ class StructuredSampling(object):
         outputPath: str
             Path where the VTKs should be saved. Should exist. This is useful when specifying 'Low' and
             'HighT*' high-level directories. outputPath = os.path.join(path,'processedData','HighT1')
+        pptag: str
+            Post-processing tag to convert if group is given. E.g. pptag='box_hr'
         offsetz: scalar
             Offset in the z direction, used to make sure both high- and low-res boxes have a point in the
             desired height. It is needed, e.g., when there is a cell edge at 150, and cell center at 145,
@@ -948,6 +1027,11 @@ class StructuredSampling(object):
             and 0 when it's not. This variable will dictate the velocity values that will become NaNs.
 
         '''
+
+        # Redefine some variables as the user might call just this method
+        self.verbose = verbose
+        self.pptag = pptag
+
         if not os.path.exists(outputPath):
             raise ValueError(f'The output path should exist. Stopping.')
 
@@ -957,21 +1041,25 @@ class StructuredSampling(object):
         else:
             var = ['velocityx','velocityy','velocityz']
 
-        if isinstance(dsOrGroup,xr.Dataset):
+        self.get_all_times_native()
+        if itime_f == -1:
+            itime_f = self.all_times[-1]
+        available_time_indexes = [n for n in self.all_times if itime_i <= n <= itime_f]
+
+        if len(available_time_indexes) == 0:
+            #print(f'No saved time for the range requested, [{itime_i}, {itime_f}). Stopping.')
+            return
+
+        if isinstance(dsOrGroup, xr.Dataset):
             ds = dsOrGroup
-            ndt = len(ds.samplingtimestep)
-            xarray = ds.x
-            yarray = ds.y
-            zarray = ds.z
+            #ndt = len(ds.samplingtimestep)
         else:
-            if verbose: print(f'    Reading group {dsOrGroup}, from sampling time step {itime_i} to {itime_f}...', flush=True)
-            ds = self.read_single_group(group=dsOrGroup, itime=itime_i, ftime=itime_f, outputPath=None,
-                                        simCompleted=True, verbose=verbose, var=var)
-            if verbose: print(f'    Done reading group {dsOrGroup}, from sampling time steps above.', flush=True)
-            ndt = len(ds.samplingtimestep)  # rt mar13: I had ds.num_time_steps here, but it kept crashing 
-            xarray = ds.x
-            yarray = ds.y
-            zarray = ds.z
+            if verbose: print(f'    Reading group {dsOrGroup}, for sampling time step {itime_i} to {itime_f}...', flush=True)
+            ds = self.read_single_group(group=dsOrGroup, itime=itime_i, ftime=itime_f, file=file, pptag=pptag,
+                                        outputPath=None, simCompleted=True, verbose=verbose, var=var)
+
+            if verbose: print(f'    Done reading group {dsOrGroup}, for sampling time steps above.', flush=True)
+            #ndt = len(ds.samplingtimestep)  # rt mar13: I had ds.num_time_steps here, but it kept crashing 
 
         if terrain:
             #ds['u'] = ds['u'].where(ds['terrainBlank'] == 0, np.nan)
@@ -993,11 +1081,28 @@ class StructuredSampling(object):
             if t0<=0 or dt<=0:
                 raise ValueError (f'Both the dt and t0 need to be positive')
 
-        if itime_f==-1:
-            itime_f = ndt
+        # Get the last time index if all times were requested
+        if itime_f==-1 and self.samplingformat.startswith('netcdf'):
+            itime_f = len(ds.samplingtimestep)
+        elif itime_f==-1 and self.samplingformat == 'native':
+            itime_f = self.all_times[-1]
 
+        # Define the time index loop. To allow native sampling to use this method as is, let's change the
+        # range of times to be looped on. For netcdf, these are indexes of related to the total number of
+        # saved snapshots. If 3 snapshots were saved, itime_i and itime_f would be 0 and 2 to save all of
+        # them. For native, these indexes are related to the amrwind time step index. So we will assemble
+        # the the array of times in the same fashion as netcdf, but the ones corresponding to the amrwind
+        # dt index. For example, if the user wants to save all the steps between 105 and 110 indexes, and
+        # the saved time indexes are 102, 105, 108, 111, etc, the timerange array will contain only [1,2]
+        # as those are related to the positions 1 and 2 of the saved amrwind_dt_index that are within the
+        # requested range
+        if self.samplingformat == 'native':
+            amrwind_dt_index_range = available_time_indexes
+            timerange = ds.samplingtimestep.where(ds.amrwind_dt_index == amrwind_dt_index_range, drop=True).values
+        else: # netcdf
+            timerange = np.arange(itime_i, itime_f)
 
-        for t in np.arange(itime_i, itime_f):
+        for t in timerange:
 
             dstime = ds.sel(samplingtimestep=t)
             if timegiven:
@@ -1005,8 +1110,8 @@ class StructuredSampling(object):
             else:
                 currentvtk = os.path.join(outputPath,f'Amb.t{vtkstartind+t}.vtk')
 
-            if verbose:
-                print(f'Saving {currentvtk}', flush=True)
+            #if verbose: print(f'Saving {currentvtk}', flush=True)
+            print(f'Saving {currentvtk}', flush=True)
 
             with open(currentvtk,'w', encoding='utf-8') as vtk:
                 vtk.write(f'# vtk DataFile Version 3.0\n')
@@ -1024,7 +1129,7 @@ class StructuredSampling(object):
                 vtk.write(f'U 3 {self.nx*self.ny*self.nz} float\n')
                 
                 # Read the all u,v,w values in a single function call
-                point = dstime.sel(x=xarray,y=yarray,z=zarray)
+                point = dstime.sel(x=ds.x, y=ds.y, z=ds.z)
                 
                 # Reshape the data to get it in an order required by FAST.FARM
                 uval = np.array(point.u.values)
