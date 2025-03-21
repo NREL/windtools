@@ -272,6 +272,11 @@ class StructuredSampling(object):
         self.ny = len(self.y)
         self.nz = len(self.z)
 
+        # For probe sampling
+        if self.nz != 1:
+            self.z_nonunique  = df['zco'].values
+            self.nz_nonunique = len(self.z_nonunique)
+
 
     def getGroupProperties_xr(self, ds=None, group=None):
 
@@ -449,7 +454,7 @@ class StructuredSampling(object):
         for i, dt in enumerate(desired_time_indexes):
             print(f'Reading time index {dt}')
             curr_ds = self._read_single_dt_native(group, dt)
-            curr_ds = curr_ds.expand_dims('samplingtimestep', axis=-1).assign_coords({'samplingtimestep': [samplingtimestep[i]]})
+            curr_ds = curr_ds.expand_dims('samplingtimestep', axis=-1).assign_coords({'samplingtimestep': [samplingtimestep[i]]}) 
             ds.append(curr_ds)
         ds = xr.concat(ds, dim='samplingtimestep')
 
@@ -481,27 +486,21 @@ class StructuredSampling(object):
         # Get group properties
         self.getGroupProperties_native(df, group)
 
-        # Re-format the info dict for convenience
-        #self.info = {item['label']:item for item in self.pfile.info["samplers"]}
-        #ngroups = len(self.info)
-
-        # Now look for the correspondence between the requested tag and the label index read as info
-        #self.all_available_groups = list(self.info.keys())
-
-        #try:
-        #    desired_set_id = self.info[group]['index']
-        #except KeyError:
-        #    raise ValueError(f'Requested group {group} not found. Available groups: {self.all_available_groups}')
-
         # Slice the data and re-format
         df = df[df['set_id'] == self.desired_set_id]
 
-        #self.x=np.unique(df['xco'].values)
-        #self.y=np.unique(df['yco'].values)
-        #self.z=np.unique(df['zco'].values)
-        #self.nx = len(self.x)
-        #self.ny = len(self.y)
-        #self.nz = len(self.z)
+        if   self.sampling_type == 'PlaneSampler':
+            ds = self._read_plane_sampler_native(df)
+        elif self.sampling_type == 'ProbeSampler':
+            ds = self._read_probe_sampler_native(df)
+        else:
+            raise ValueError(f'Stopping. Sampling type {self.sampling_type} not available')
+
+        return ds
+
+
+
+    def _read_plane_sampler_native(self, df):
 
         u = df['velocityx'].values.reshape(self.nx, self.ny, self.nz)
         v = df['velocityy'].values.reshape(self.nx, self.ny, self.nz)
@@ -517,6 +516,36 @@ class StructuredSampling(object):
         )
 
         return ds
+
+
+    def _read_probe_sampler_native(self, df):
+        '''
+        Reads in generic sampler. This function is still specific for terrain-following slices
+        where the coordinates x and y are in a grid. If that isn't the case, it will fail.
+        '''
+
+        u = df['velocityx'].values.reshape(self.nx, self.ny)
+        v = df['velocityy'].values.reshape(self.nx, self.ny)
+        w = df['velocityz'].values.reshape(self.nx, self.ny)
+
+        ds = xr.Dataset(
+            data_vars=dict(
+                u=(["x", "y"], u),
+                v=(["x", "y"], v),
+                w=(["x", "y"], w),
+            ),
+            coords=dict(x=("x", self.x), y=("y", self.y))
+        )
+
+        # If we use self.z directly, the repetead values have been removed. We do that for regular flat slices
+        # but here we need to recover the entire grid such that each pair (x,y) has a z value
+        z_reshaped = self.z_nonunique.reshape(self.nx, self.ny)
+
+        # Add terrain height to the array
+        ds["samplingheight"] = (["x", "y"], z_reshaped)
+
+        return ds
+
 
 
     def read_single_group_netcdf(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz'], simCompleted=False, verbose=False, package='xr'):
@@ -579,7 +608,7 @@ class StructuredSampling(object):
         elif self.sampling_type == 'PlaneSampler':
             ds = self._read_plane_sampler_h5py(dsraw, group, itime, ftime, step, outputPath, verbose)
         elif self.sampling_type == 'ProbeSampler':
-            ds = self._read_probe_sampler(dsraw)
+            ds = self._read_probe_sampler_h5py(dsraw)
         else:
             raise ValueError(f'Stopping. Sampling type {self.sampling_type} not recognized')
 
@@ -608,7 +637,7 @@ class StructuredSampling(object):
         elif self.sampling_type == 'PlaneSampler':
             ds = self._read_plane_sampler_netcdf_xr(dsraw, group, itime, ftime, step, outputPath, verbose)
         elif self.sampling_type == 'ProbeSampler':
-            ds = self._read_probe_netcdf_sampler(dsraw, group, itime, ftime, step, outputPath, verbose)
+            ds = self._read_probe_sampler_netcdf(dsraw, group, itime, ftime, step, outputPath, verbose)
         else:
             raise ValueError(f'Stopping. Sampling type {self.sampling_type} not recognized')
 
@@ -872,7 +901,7 @@ class StructuredSampling(object):
         where the coordinates x and y are in a grid. If that isn't the case, it will fail.
         '''
 
-        print(f"Genering probe sampler identified. Assuming this is a terrain-following sampling.")
+        print(f"Generic probe sampler identified. Assuming this is a terrain-following sampling.")
 
         if ftime == -1:
             ftime = self.ndt
@@ -934,6 +963,10 @@ class StructuredSampling(object):
                 ds_new.to_netcdf(os.path.join(outputPath,f'{group}.nc'))
 
         return ds_new
+
+
+    def _read_probe_sampler_h5py(self, ds):
+        raise NotImplementedError(f'Sampling `ProbeSampler` is not implemented for h5py. Use xarray instead.')
 
 
     def set_dt(self, dt):
