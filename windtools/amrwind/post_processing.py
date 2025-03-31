@@ -492,7 +492,6 @@ class StructuredSampling(object):
         if   self.sampling_type == 'PlaneSampler':
             ds = self._read_plane_sampler_native(df)
         elif self.sampling_type == 'ProbeSampler':
-            self.df = df
             ds = self._read_probe_sampler_native(df)
         else:
             raise ValueError(f'Stopping. Sampling type {self.sampling_type} not available')
