@@ -452,7 +452,7 @@ class StructuredSampling(object):
 
         ds = []
         for i, dt in enumerate(desired_time_indexes):
-            print(f'Reading time index {dt}')
+            if self.verbose: print(f'Reading time index {dt}')
             curr_ds = self._read_single_dt_native(group, dt)
             curr_ds = curr_ds.expand_dims('samplingtimestep', axis=-1).assign_coords({'samplingtimestep': [samplingtimestep[i]]}) 
             ds.append(curr_ds)
@@ -522,27 +522,54 @@ class StructuredSampling(object):
         '''
         Reads in generic sampler. This function is still specific for terrain-following slices
         where the coordinates x and y are in a grid. If that isn't the case, it will fail.
+
+        When requesting multiple offsets, there will be no easy way to tell them apart. When
+        that is requested and we assume they are terrain-following slices, we know that after
+        nx*ny points, the next offset will come up. 
         '''
 
-        u = df['velocityx'].values.reshape(self.nx, self.ny)
-        v = df['velocityy'].values.reshape(self.nx, self.ny)
-        w = df['velocityz'].values.reshape(self.nx, self.ny)
+        # Check how many offsets are there
+        n_points_per_offset = self.nx*self.ny
+        n_offsets = len(df['velocityx'])/n_points_per_offset
 
-        ds = xr.Dataset(
-            data_vars=dict(
-                u=(["x", "y"], u),
-                v=(["x", "y"], v),
-                w=(["x", "y"], w),
-            ),
-            coords=dict(x=("x", self.x), y=("y", self.y))
-        )
+        if n_offsets - int(n_offsets) != 0:
+            raise ValueError('Issue parsing proble sampler. Only terrain-following slices are supported. Stopping.')
 
-        # If we use self.z directly, the repetead values have been removed. We do that for regular flat slices
-        # but here we need to recover the entire grid such that each pair (x,y) has a z value
-        z_reshaped = self.z_nonunique.reshape(self.nx, self.ny)
+        ds = []
+        for curr_offset_id in range(int(n_offsets)):
+            # Slices dataframe to get just the current offset
+            df_curr_offset = self.df[curr_offset_id*self.nx*self.ny:(curr_offset_id+1)*self.nx*self.ny]
+            
+            u = df_curr_offset['velocityx'].values.reshape(self.nx, self.ny)
+            v = df_curr_offset['velocityy'].values.reshape(self.nx, self.ny)
+            w = df_curr_offset['velocityz'].values.reshape(self.nx, self.ny)
 
-        # Add terrain height to the array
-        ds["samplingheight"] = (["x", "y"], z_reshaped)
+            ds_curr_offset = xr.Dataset(
+                data_vars=dict(
+                    u=(["x", "y"], u),
+                    v=(["x", "y"], v),
+                    w=(["x", "y"], w),
+                ),
+                coords=dict(x=("x", self.x), y=("y", self.y))
+            )
+
+            # If we use self.z directly, the repetead values have been removed. We do that for regular flat slices
+            # but here we need to recover the entire grid such that each pair (x,y) has a z value
+            z_nonunique_curr_offset = self.z_nonunique[curr_offset_id*self.nx*self.ny:(curr_offset_id+1)*self.nx*self.ny]
+            z_reshaped = z_nonunique_curr_offset.reshape(self.nx, self.ny)
+
+            # Add terrain height and current offset id to the array
+            ds_curr_offset["samplingheight"] = (["x", "y"], z_reshaped)
+            ds_curr_offset = ds_curr_offset.expand_dims('offset_id', axis=-1).assign_coords({'offset_id': [curr_offset_id]})
+            
+            # Append to main dataset
+            ds.append(ds_curr_offset)
+            
+        # Combine all the offsets
+        ds = xr.concat(ds, dim='offset_id')
+
+        # Remove the offset_id entry if single offset
+        ds = ds.squeeze()
 
         return ds
 
@@ -551,10 +578,10 @@ class StructuredSampling(object):
     def read_single_group_netcdf(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz'], simCompleted=False, verbose=False, package='xr'):
 
         if package == 'xr':
-            print(f'Reading single group using xarray. This will take longer and require more RAM')
+            if self.verbose: print(f'Reading single group using xarray. This will take longer and require more RAM')
             ds = self.read_single_group_netcdf_xr(group, itime, ftime, step, outputPath, var, simCompleted, verbose)
         elif package == 'h5py':
-            print(f'Reading single group using h5py. This is fast, but future computations might be slow')
+            if self.verbose: print(f'Reading single group using h5py. This is fast, but future computations might be slow')
             ds = self.read_single_group_netcdf_h5py(group, itime, ftime, step, outputPath, var, simCompleted, verbose)
         else:
             raise ValueError('For netcdf, package can only be `h5py` or `xr`.')
