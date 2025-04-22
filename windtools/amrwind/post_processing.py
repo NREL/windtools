@@ -502,6 +502,10 @@ class StructuredSampling(object):
 
     def _read_plane_sampler_native(self, df):
 
+        # We can no longer garantee the ordering from AMR-Wind will be consistent
+        # so even though an ordering step is expensive, we'll do it
+        df = df.sort_values(['xco', 'yco', 'zco'])
+
         u = df['velocityx'].values.reshape(self.nx, self.ny, self.nz)
         v = df['velocityy'].values.reshape(self.nx, self.ny, self.nz)
         w = df['velocityz'].values.reshape(self.nx, self.ny, self.nz)
@@ -537,8 +541,9 @@ class StructuredSampling(object):
 
         ds = []
         for curr_offset_id in range(int(n_offsets)):
+
             # Slices dataframe to get just the current offset
-            df_curr_offset = self.df[curr_offset_id*self.nx*self.ny:(curr_offset_id+1)*self.nx*self.ny]
+            df_curr_offset = df[curr_offset_id*self.nx*self.ny:(curr_offset_id+1)*self.nx*self.ny]
             
             u = df_curr_offset['velocityx'].values.reshape(self.nx, self.ny)
             v = df_curr_offset['velocityy'].values.reshape(self.nx, self.ny)
