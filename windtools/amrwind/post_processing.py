@@ -398,6 +398,19 @@ class StructuredSampling(object):
             self._prepare_to_read_native()
             ds = self.read_single_group_native(group, itime, ftime, step, outputPath, var) 
 
+
+        if outputPath is not None:
+            if outputPath.endswith('.zarr'):
+                print(f'Saving {outputPath}')
+                ds.to_zarr(outputPath)
+            elif outputPath.endswith('.nc'):
+                print(f'Saving {outputPath}')
+                ds.to_netcdf(outputPath)
+            else:
+                filename = f'ds_{group}_timeidx_{itime}_{step}_{ftime}.nc'
+                print(f'Saving {os.path.join(outputPath,filename)}')
+                ds.to_netcdf(os.path.join(outputPath,filename))
+
         return ds
 
 
@@ -549,6 +562,10 @@ class StructuredSampling(object):
 
             # Slices dataframe to get just the current offset
             df_curr_offset = df[curr_offset_id*self.nx*self.ny:(curr_offset_id+1)*self.nx*self.ny]
+
+            # We can no longer garantee the ordering from AMR-Wind will be consistent
+            # so even though an ordering step is expensive, we'll do it
+            df_curr_offset = df_curr_offset.sort_values(['xco', 'yco'])
             
             u = df_curr_offset['velocityx'].values.reshape(self.nx, self.ny)
             v = df_curr_offset['velocityy'].values.reshape(self.nx, self.ny)
