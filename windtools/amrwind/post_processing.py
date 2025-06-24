@@ -264,6 +264,11 @@ class StructuredSampling(object):
         # Slice the data and get axes info
         df = df[df['set_id'] == self.desired_set_id]
 
+        # Get unique values in case grid is at weird locaitons
+        df['xco'] = np.round(df['xco'], 6)
+        df['yco'] = np.round(df['yco'], 6)
+        df['zco'] = np.round(df['zco'], 6)
+
         # Get axes
         self.x=np.unique(df['xco'].values)
         self.y=np.unique(df['yco'].values)
