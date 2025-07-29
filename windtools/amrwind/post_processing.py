@@ -264,6 +264,11 @@ class StructuredSampling(object):
         # Slice the data and get axes info
         df = df[df['set_id'] == self.desired_set_id]
 
+        # Get unique values in case grid is at weird locaitons
+        df['xco'] = np.round(df['xco'], 6)
+        df['yco'] = np.round(df['yco'], 6)
+        df['zco'] = np.round(df['zco'], 6)
+
         # Get axes
         self.x=np.unique(df['xco'].values)
         self.y=np.unique(df['yco'].values)
@@ -393,7 +398,74 @@ class StructuredSampling(object):
             self._prepare_to_read_native()
             ds = self.read_single_group_native(group, itime, ftime, step, outputPath, var) 
 
+
+        if outputPath is not None:
+            if outputPath.endswith('.zarr'):
+                print(f'Saving {outputPath}')
+                ds.to_zarr(outputPath)
+            elif outputPath.endswith('.nc'):
+                print(f'Saving {outputPath}')
+                ds.to_netcdf(outputPath)
+            else:
+                filename = f'ds_{group}_timeidx_{itime}_{step}_{ftime}.nc'
+                print(f'Saving {os.path.join(outputPath,filename)}')
+                ds.to_netcdf(os.path.join(outputPath,filename))
+
         return ds
+
+
+    def read_single_group_par(self, group, itime, ftime, step=1, file=None, pptag=None, outputPath=None, simCompleted=False,
+                          var=['velocityx','velocityy','velocityz'], verbose=False, package='xr', ncores=None):
+        '''
+        This method is intended to be used within a Jupyter Notebook. If it suggested ncores is set to a value
+        lower than the actual number of cores for memory purposes. Output is saved to disk and not returned.
+        '''
+
+        import multiprocessing
+        from itertools import repeat
+
+        if ncores is None:
+            ncores = multiprocessing.cpu_count()
+
+        if outputPath is None:
+            raise ValueError(f'An outputPath needs to be defined. This function only saved to disk.')
+
+        # Redefine some variables as the user might call just this method
+        self.verbose = verbose
+        self.pptag = pptag
+        self.get_all_times_native()
+        if ftime == -1:
+            ftime = self.all_times[-1]
+        available_time_indexes = [n for n in self.all_times if itime <= n <= ftime]
+        chunks =  np.array_split(available_time_indexes, ncores)
+        
+        # Get rid of the empty chunks (happens when the number of boxes is lower than 96)
+        chunks = [c for c in chunks if c.size > 0]
+        # Now, get the beginning and end of each separate chunk
+        itime_i_list = [i[0]    for i in chunks]
+        itime_f_list = [i[-1]+1 for i in chunks]
+
+        if __name__ == 'windtools.amrwind.post_processing':
+            pool = multiprocessing.Pool(processes=ncores)
+            _ = pool.starmap(self.read_single_group, zip(repeat(group),        # group
+                                                         itime_i_list,         # itime
+                                                         itime_f_list,         # ftime
+                                                         repeat(step),         # step
+                                                         repeat(file),         # file
+                                                         repeat(pptag),        # pptag
+                                                         repeat(outputPath),   # outputPath
+                                                         repeat(simCompleted), # simCompleted
+                                                         repeat(var),          # var
+                                                         repeat(verbose),      # verbose
+                                                         repeat(package)       # package
+                                                        )
+                                                      )
+
+            pool.close()
+            pool.join()
+
+        print(f'Output saved to disk at {outputPath}')
+        return None
 
 
     def _prepare_to_read_netcdf_legacy(self):
@@ -544,6 +616,10 @@ class StructuredSampling(object):
 
             # Slices dataframe to get just the current offset
             df_curr_offset = df[curr_offset_id*self.nx*self.ny:(curr_offset_id+1)*self.nx*self.ny]
+
+            # We can no longer garantee the ordering from AMR-Wind will be consistent
+            # so even though an ordering step is expensive, we'll do it
+            df_curr_offset = df_curr_offset.sort_values(['xco', 'yco'])
             
             u = df_curr_offset['velocityx'].values.reshape(self.nx, self.ny)
             v = df_curr_offset['velocityy'].values.reshape(self.nx, self.ny)
