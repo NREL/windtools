@@ -414,6 +414,60 @@ class StructuredSampling(object):
         return ds
 
 
+    def read_single_group_par(self, group, itime, ftime, step=1, file=None, pptag=None, outputPath=None, simCompleted=False,
+                          var=['velocityx','velocityy','velocityz'], verbose=False, package='xr', ncores=None):
+        '''
+        This method is intended to be used within a Jupyter Notebook. If it suggested ncores is set to a value
+        lower than the actual number of cores for memory purposes. Output is saved to disk and not returned.
+        '''
+
+        import multiprocessing
+        from itertools import repeat
+
+        if ncores is None:
+            ncores = multiprocessing.cpu_count()
+
+        if outputPath is None:
+            raise ValueError(f'An outputPath needs to be defined. This function only saved to disk.')
+
+        # Redefine some variables as the user might call just this method
+        self.verbose = verbose
+        self.pptag = pptag
+        self.get_all_times_native()
+        if ftime == -1:
+            ftime = self.all_times[-1]
+        available_time_indexes = [n for n in self.all_times if itime <= n <= ftime]
+        chunks =  np.array_split(available_time_indexes, ncores)
+        
+        # Get rid of the empty chunks (happens when the number of boxes is lower than 96)
+        chunks = [c for c in chunks if c.size > 0]
+        # Now, get the beginning and end of each separate chunk
+        itime_i_list = [i[0]    for i in chunks]
+        itime_f_list = [i[-1]+1 for i in chunks]
+
+        if __name__ == 'windtools.amrwind.post_processing':
+            pool = multiprocessing.Pool(processes=ncores)
+            _ = pool.starmap(self.read_single_group, zip(repeat(group),        # group
+                                                         itime_i_list,         # itime
+                                                         itime_f_list,         # ftime
+                                                         repeat(step),         # step
+                                                         repeat(file),         # file
+                                                         repeat(pptag),        # pptag
+                                                         repeat(outputPath),   # outputPath
+                                                         repeat(simCompleted), # simCompleted
+                                                         repeat(var),          # var
+                                                         repeat(verbose),      # verbose
+                                                         repeat(package)       # package
+                                                        )
+                                                      )
+
+            pool.close()
+            pool.join()
+
+        print(f'Output saved to disk at {outputPath}')
+        return None
+
+
     def _prepare_to_read_netcdf_legacy(self):
         self.fpath = os.path.join(self.pppath, self.file)
 
