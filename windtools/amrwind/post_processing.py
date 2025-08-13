@@ -248,7 +248,6 @@ class StructuredSampling(object):
 
         # Re-format the info dict for convenience
         self.info = {item['label']:item for item in self.pfile.info["samplers"]}
-        #ngroups = len(self.info)
 
         # Get sampling type
         self.sampling_type = self.info[group]['type']
@@ -262,7 +261,7 @@ class StructuredSampling(object):
             raise ValueError(f'Requested group {group} not found. Available groups: {self.all_available_groups}')
 
         # Slice the data and get axes info
-        df = df[df['set_id'] == self.desired_set_id]
+        df = df[df['set_id'] == self.desired_set_id].copy()
 
         # Get unique values in case grid is at weird locaitons
         df['xco'] = np.round(df['xco'], 6)
@@ -331,7 +330,7 @@ class StructuredSampling(object):
 
 
     def read_single_group(self, group, itime, ftime, step=1, file=None, pptag=None, outputPath=None, simCompleted=False,
-                          var=['velocityx','velocityy','velocityz'], verbose=False, package='xr'):
+                          var=['all'], verbose=False, package='xr', terrain=False):
         '''
         Reads a single group of data in either netcdf or native format.
         Supports backwards compatibility and identify sampling method used.
@@ -367,6 +366,8 @@ class StructuredSampling(object):
         '''
 
         self.verbose=verbose
+        self.reqvars=var
+        self.terrain=terrain
 
         if not isinstance(group, str):
             raise ValueError(f'group should be a string. Received {group}.')
@@ -415,7 +416,7 @@ class StructuredSampling(object):
 
 
     def read_single_group_par(self, group, itime, ftime, step=1, file=None, pptag=None, outputPath=None, simCompleted=False,
-                          var=['velocityx','velocityy','velocityz'], verbose=False, package='xr', ncores=None):
+                          var=['velocityx','velocityy','velocityz'], verbose=False, package='xr', terrain=False, ncores=None):
         '''
         This method is intended to be used within a Jupyter Notebook. If it suggested ncores is set to a value
         lower than the actual number of cores for memory purposes. Output is saved to disk and not returned.
@@ -429,6 +430,7 @@ class StructuredSampling(object):
 
         if outputPath is None:
             raise ValueError(f'An outputPath needs to be defined. This function only saved to disk.')
+        os.makedirs(outputPath, exist_ok=True)
 
         # Redefine some variables as the user might call just this method
         self.verbose = verbose
@@ -481,8 +483,6 @@ class StructuredSampling(object):
     def _prepare_to_read_native(self):
         # Get all available tags and check if the requested one exists
         self._get_unique_pp_tags_native()
-        if self.pptag not in self.all_available_pp_tags:
-            raise ValueError(f'Requested tag {self.pptag} not available. Available tags are: {self.all_available_pp_tags}.')
 
     def get_all_times_native(self):
         self._prepare_to_read_native()
@@ -493,13 +493,9 @@ class StructuredSampling(object):
 
 
 
-    def read_single_group_native(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['velocityx','velocityy','velocityz']):
+    def read_single_group_native(self, group, itime=0, ftime=-1, step=1, outputPath=None, var=['all']):
 
         if isinstance(var,str): var = [var]
-        if var==['all']:
-            self.reqvars = ['velocityx','velocityy','velocityz','temperature','tke']
-        else:
-            self.reqvars = var
 
         # Find all time indexes between requested range
         #all_times = [int(f.replace(self.pptag, "")) for f in self.allfiles if f.startswith(self.pptag)]
@@ -578,17 +574,27 @@ class StructuredSampling(object):
         # so even though an ordering step is expensive, we'll do it
         df = df.sort_values(['xco', 'yco', 'zco'])
 
-        u = df['velocityx'].values.reshape(self.nx, self.ny, self.nz)
-        v = df['velocityy'].values.reshape(self.nx, self.ny, self.nz)
-        w = df['velocityz'].values.reshape(self.nx, self.ny, self.nz)
-        
+        if self.reqvars == ['all']:
+            exclude_vars = ['uid', 'set_id', 'probe_id', 'xco', 'yco', 'zco']
+            wanted_vars = [v for v in df.columns if v not in exclude_vars]
+            self.reqvars = wanted_vars
+
+        # If requested terrain but the mu_turb variable has not been saved, stop
+        if self.terrain and 'mu_turb' not in self.reqvars:
+            raise ValueError(f'The variable mu_turb was not saved. It is required to process terrain data. '\
+                             f'Either re-run AMR-Wind including mu_turb or set terrain=False')
+
+
+        data_vars = {}
+        rename_map = {'velocityx': 'u', 'velocityy': 'v', 'velocityz': 'w'}
+        for var in self.reqvars:
+            arr = df[var].values.reshape(self.nx, self.ny, self.nz)
+            var_name = rename_map.get(var, var)
+            data_vars[var_name] = (['x', 'y', 'z'], arr)
+
         ds = xr.Dataset(
-            data_vars=dict(
-                u=(["x", "y", "z"], u),
-                v=(["x", "y", "z"], v),
-                w=(["x", "y", "z"], w),
-            ),
-            coords=dict(x=("x", self.x), y=("y", self.y),z=("z", self.z))
+            data_vars=data_vars,
+            coords=dict(x=("x", self.x), y=("y", self.y), z=("z", self.z))
         )
 
         return ds
@@ -1142,6 +1148,8 @@ class StructuredSampling(object):
         outputPath: str
             Path where the VTKs should be saved. Should exist. This is useful when specifying 'Low' and
             'HighT*' high-level directories. outputPath = os.path.join(path,'processedData','HighT1')
+        file: str, optional
+            Filename for netcdf format. E.g. 'box_hr00100.nc'
         pptag: str
             Post-processing tag to convert if group is given. E.g. pptag='box_hr'
         offsetz: scalar
@@ -1174,13 +1182,13 @@ class StructuredSampling(object):
         self.pptag = pptag
 
         if not os.path.exists(outputPath):
-            raise ValueError(f'The output path should exist. Stopping.')
+            print(f'[WARN]: The output path does not exist. Creating {outputPath}.')
+            os.makedirs(outputPath)
 
-        if terrain:
-            #var = ['velocityx','velocityy','velocityz','terrainBlank']
-            var = ['velocityx','velocityy','velocityz','mu_turb']
-        else:
-            var = ['velocityx','velocityy','velocityz']
+        #if terrain:
+        #    var = ['velocityx','velocityy','velocityz','mu_turb']
+        #else:
+        #    var = ['velocityx','velocityy','velocityz']
 
         self.get_all_times_native()
         if itime_f == -1:
