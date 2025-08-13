@@ -213,12 +213,10 @@ class StructuredSampling(object):
         basenames = [re.match(r'([a-zA-Z_]+)\d+', file).group(1)
                      for file in self.allfiles if re.match(r'([a-zA-Z_]+)\d+', file)]
 
-        # Get unique values that have 4 or more directories (thus excluding abl_statistics, etc)
+        # Check that the requested post-processing tag exists
         strings, count = np.unique(basenames, return_counts=True)
-        self.all_available_pp_tags = strings[count>=4]
-
-        #if self.verbose:
-        #    print(f'Native format: unique post-processing tags found: {self.all_available_pp_tags}')
+        if self.pptag not in strings:
+            raise ValueError(f'Requested tag {self.pptag} not available. Available tags are: {strings}.')
 
 
     def getGroupProperties(self, ds=None, group=None, package=None):
@@ -535,7 +533,10 @@ class StructuredSampling(object):
         # our case here, we want to create a `samplingtimestep` that is equivalent to the approach taken
         # with netcdf sampling so that both methods are equivalent. We retain the amrwind_dt_index for 
         # native sampling.
-        ds['amrwind_dt_index'] = (('samplingtimestep'), desired_time_indexes)
+        #ds['amrwind_dt_index'] = (('samplingtimestep'), desired_time_indexes)
+        if not np.array_equal(desired_time_indexes, ds['time_index']):
+            raise ValueError(f'There is a mismatch on the AMR-Wind time index. From the sampling_info file '\
+                             f'the indexes are {ds["time_index"]} and from other method, {ds["amrwind_dt_index"]}.')
 
         return ds
 
@@ -563,6 +564,10 @@ class StructuredSampling(object):
             ds = self._read_probe_sampler_native(df)
         else:
             raise ValueError(f'Stopping. Sampling type {self.sampling_type} not available')
+
+        # Set times
+        ds['time'] = self.pfile.info['time']
+        ds['time_index'] = time_index
 
         return ds
 
@@ -1337,6 +1342,9 @@ def addDatetime(ds,dt,origin=pd.to_datetime('2000-01-01 00:00:00'), computemean=
             meanw = ds['w'].mean(dim='datetime')
 
         # Add mean computations
+        ds['umean'] = meanu
+        ds['vmean'] = meanv
+        ds['wmean'] = meanw
         ds['up'] = ds['u'] - meanu
         ds['vp'] = ds['v'] - meanv
         ds['wp'] = ds['w'] - meanw
