@@ -9,6 +9,12 @@ import h5py
 import warnings
 from netCDF4 import Dataset
 
+def _read_single_group_helper(args):
+    # args is a tuple containing all arguments in order:
+    self, group, itime_i, itime_f, step, file, pptag, outputPath, simCompleted, var, verbose, package, terrain = args
+    return self.read_single_group(group, itime_i, itime_f, step, file, pptag, outputPath, simCompleted, var, verbose, package, terrain)
+
+
 class ABLStatistics(object):
 
     def __init__(self,fpath,start_date=None,mean_profiles=False,
@@ -437,33 +443,21 @@ class StructuredSampling(object):
         if ftime == -1:
             ftime = self.all_times[-1]
         available_time_indexes = [n for n in self.all_times if itime <= n <= ftime]
-        chunks =  np.array_split(available_time_indexes, ncores)
-        
-        # Get rid of the empty chunks (happens when the number of boxes is lower than 96)
-        chunks = [c for c in chunks if c.size > 0]
-        # Now, get the beginning and end of each separate chunk
-        itime_i_list = [i[0]    for i in chunks]
-        itime_f_list = [i[-1]+1 for i in chunks]
 
+        itime_i_list = available_time_indexes
+        itime_f_list = [n+1 for n in available_time_indexes]
+
+        from itertools import product
         if __name__ == 'windtools.amrwind.post_processing':
-            pool = multiprocessing.Pool(processes=ncores)
-            _ = pool.starmap(self.read_single_group, zip(repeat(group),        # group
-                                                         itime_i_list,         # itime
-                                                         itime_f_list,         # ftime
-                                                         repeat(step),         # step
-                                                         repeat(file),         # file
-                                                         repeat(pptag),        # pptag
-                                                         repeat(outputPath),   # outputPath
-                                                         repeat(simCompleted), # simCompleted
-                                                         repeat(var),          # var
-                                                         repeat(verbose),      # verbose
-                                                         repeat(package)       # package
-                                                        )
-                                                      )
-
-            pool.close()
-            pool.join()
-
+            args_iter = (
+                (self, group, itime_i, itime_f, step, file, pptag, outputPath, simCompleted, var, verbose, package, terrain)
+                for itime_i, itime_f in zip(itime_i_list, itime_f_list)
+            )
+        
+            with multiprocessing.Pool(processes=ncores) as pool:
+                for _ in pool.imap_unordered(_read_single_group_helper, args_iter, chunksize=1):
+                    pass
+        
         print(f'Output saved to disk at {outputPath}')
         return None
 
