@@ -1086,7 +1086,7 @@ class StructuredSampling(object):
         self.dt = dt
 
 
-    def to_vtk_par(self, group, outputPath, file=None, pptag=None, verbose=True, offsetz=0, itime_i=0, itime_f=-1, t0=None, dt=None, vtkstartind=0, terrain=False, ncores=None):
+    def to_vtk_par(self, group, outputPath, file=None, pptag=None, verbose=True, offsetz=0, itime_i=0, itime_f=-1, t0=None, dt=None, vtkstartind=0, use_samplinginfo=False, terrain=False, ncores=None):
         '''
         For native only. This method is intended to be used within a Jupyter Notebook. For proper parallelization
         of the saving of the VTKs, use `postprocess_amr_boxes2vtk.py`.
@@ -1129,6 +1129,7 @@ class StructuredSampling(object):
                                               repeat(t0),              # t0
                                               repeat(dt),              # dt
                                               repeat(vtkstartind),     # vtkstartind
+                                              repeat(use_samplinginfo),# use_samplinginfo
                                               repeat(terrain)          # terrain
                                              )
                                           )
@@ -1137,7 +1138,7 @@ class StructuredSampling(object):
 
 
 
-    def to_vtk(self, dsOrGroup, outputPath, file=None, pptag=None, verbose=True, offsetz=0, itime_i=0, itime_f=-1, t0=None, dt=None, vtkstartind=0, terrain=False):
+    def to_vtk(self, dsOrGroup, outputPath, file=None, pptag=None, verbose=True, offsetz=0, itime_i=0, itime_f=-1, t0=None, dt=None, vtkstartind=0, use_samplinginfo=False, terrain=False):
         '''
         Writes VTKs for all time stamps present in ds
 
@@ -1169,9 +1170,13 @@ class StructuredSampling(object):
             Index by which the names of the vtk files will be shifted. This is useful for saving files
             starting from a non-zero time-step when AMR-Wind crashes unxpectedly and is restarted using
             a savefile.
+        use_samplinginfo: bool
+            Whether or not to use the times from the sampling_info file. Only applicable to native sampling.
+            If given, no t0 or dt or vtkstartind should be given. The time will be taken from the native
+            sampling sampling_info.yaml file. This is the most reliable method.
         terrain: bool
             Whether or not put NaNs where the terrain is. For this option to be enabled, the dataset
-            should also contain a variable called `terrainBlank` taking the value of 1 when it's terrain
+            should also contain a variable called `mu_turb` taking the value of 1 when it's terrain
             and 0 when it's not. This variable will dictate the velocity values that will become NaNs.
 
         '''
@@ -1184,11 +1189,6 @@ class StructuredSampling(object):
             print(f'[WARN]: The output path does not exist. Creating {outputPath}.')
             os.makedirs(outputPath)
 
-        #if terrain:
-        #    var = ['velocityx','velocityy','velocityz','mu_turb']
-        #else:
-        #    var = ['velocityx','velocityy','velocityz']
-
         self.get_all_times_native()
         if itime_f == -1:
             itime_f = self.all_times[-1]
@@ -1200,22 +1200,21 @@ class StructuredSampling(object):
 
         if isinstance(dsOrGroup, xr.Dataset):
             ds = dsOrGroup
-            #ndt = len(ds.samplingtimestep)
         else:
             if verbose: print(f'    Reading group {dsOrGroup}, for sampling time step {itime_i} to {itime_f}...', flush=True)
             ds = self.read_single_group(group=dsOrGroup, itime=itime_i, ftime=itime_f, file=file, pptag=pptag,
-                                        outputPath=None, simCompleted=True, verbose=verbose, var=var)
+                                        outputPath=None, simCompleted=True, verbose=verbose, var=['all'], terrain=terrain)
 
             if verbose: print(f'    Done reading group {dsOrGroup}, for sampling time steps above.', flush=True)
-            #ndt = len(ds.samplingtimestep)  # rt mar13: I had ds.num_time_steps here, but it kept crashing 
 
         if terrain:
-            #ds['u'] = ds['u'].where(ds['terrainBlank'] == 0, np.nan)
-            #ds['v'] = ds['v'].where(ds['terrainBlank'] == 0, np.nan)
-            #ds['w'] = ds['w'].where(ds['terrainBlank'] == 0, np.nan)
             ds['u'] = ds['u'].where(ds['mu_turb'] > 0, np.nan)
             ds['v'] = ds['v'].where(ds['mu_turb'] > 0, np.nan)
             ds['w'] = ds['w'].where(ds['mu_turb'] > 0, np.nan)
+
+        if use_samplinginfo:
+            if t0 is not None or dt is not None:
+                raise ValueError(f'If time is coming from sampling_info.yaml, t0 or dt should not be specified.')
 
         if t0 is None and dt is None:
             timegiven=False
@@ -1245,28 +1244,39 @@ class StructuredSampling(object):
         # as those are related to the positions 1 and 2 of the saved amrwind_dt_index that are within the
         # requested range
         if self.samplingformat == 'native':
-            amrwind_dt_index_range = available_time_indexes
-            timerange = ds.samplingtimestep.where(ds.amrwind_dt_index == amrwind_dt_index_range, drop=True).values
+            time_index_range = available_time_indexes
+            timerange = ds.samplingtimestep.where(ds.time_index == time_index_range, drop=True).values
         else: # netcdf
             timerange = np.arange(itime_i, itime_f)
 
         for t in timerange:
 
+            self.ds = ds.copy()
             dstime = ds.sel(samplingtimestep=t)
-            if timegiven:
-                currentvtk = os.path.join(outputPath,f'Amb.time{t0+t*dt:1f}s.vtk')
+
+            if use_samplinginfo:
+                time = dstime['time'].values
+                time_index = dstime['time_index'].values
+                currentvtk = os.path.join(outputPath,f'Amb.time{time}s.vtk')
             else:
-                currentvtk = os.path.join(outputPath,f'Amb.t{vtkstartind+t}.vtk')
+                if timegiven:
+                    currentvtk = os.path.join(outputPath,f'Amb.time{t0+t*dt:1f}s.vtk')
+                else:
+                    currentvtk = os.path.join(outputPath,f'Amb.t{vtkstartind+t}.vtk')
+
 
             #if verbose: print(f'Saving {currentvtk}', flush=True)
             print(f'Saving {currentvtk}', flush=True)
 
             with open(currentvtk,'w', encoding='utf-8') as vtk:
                 vtk.write(f'# vtk DataFile Version 3.0\n')
-                if timegiven:
-                    vtk.write(f'{self.sampling_type} corresponding to time {t0+t*dt} s with offset in z of {offsetz}\n')
+                if use_samplinginfo:
+                    vtk.write(f'{self.sampling_type} corresponding to time {time} s with offset in z of {offsetz}\n')
                 else:
-                    vtk.write(f'{self.sampling_type} with offset in z of {offsetz}\n')
+                    if timegiven:
+                        vtk.write(f'{self.sampling_type} corresponding to time {t0+t*dt} s with offset in z of {offsetz}\n')
+                    else:
+                        vtk.write(f'{self.sampling_type} with offset in z of {offsetz}\n')
                 vtk.write(f'ASCII\n')
                 vtk.write(f'DATASET STRUCTURED_POINTS\n')
                 vtk.write(f'DIMENSIONS {self.nx} {self.ny} {self.nz}\n')
